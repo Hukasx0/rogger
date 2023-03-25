@@ -14,6 +14,6 @@ docker build -t my-rogger-image .
 Note: Replace "my-rogger-image" with any name you like for your Docker image.
 4. Once the Docker image has been built, you can run rogger inside a Docker container by running the following command:
 ```
-docker run --rm my-rogger-image
+docker run -p 1337:1337 --rm my-rogger-image
 ```
 Note: The "--rm" option automatically removes the container when it exits.
