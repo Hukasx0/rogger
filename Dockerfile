@@ -1,4 +1,4 @@
-FROM debian:latest
+FROM rust:latest
 
 RUN apt-get update && apt-get install -y \
     build-essential \
@@ -9,6 +9,7 @@ ENV PATH="/root/.cargo/bin:${PATH}"
 
 WORKDIR /app
 COPY . .
+COPY web/ web/
 
 RUN cargo build --release
 
