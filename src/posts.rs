@@ -5,6 +5,7 @@ pub struct Post {
    pub id: usize,
    pub name: String,
    pub text: String,
+   pub html_text: String,
    pub date: String,
 }
 
@@ -38,13 +39,15 @@ impl Posts {
           id: last_post_id,
 	  name: post.name,
 	  text: post.text,
+	  html_text: markdown::to_html(&post.html_text),
 	  date: post.date,
        });
    }
 
-   pub fn edit_post(&self, post: Post) {
+   pub fn edit_post(&self, mut post: Post) {
        let mut posts = self.posts.lock().unwrap();
        if let Some(post_to_update) = posts.iter_mut().find(|cpost| cpost.id == post.id) {
+           post.html_text = markdown::to_html(&post.html_text);
           *post_to_update = post;
        }
    }

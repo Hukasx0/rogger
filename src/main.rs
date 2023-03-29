@@ -36,7 +36,7 @@ async fn get_post(pid: actix_web::web::Path<usize>, posts: web::Data<Posts>) -> 
     let post_file = fs::read_to_string("web/post.html")
     .expect("Problem with reading post.html file");
     if let Some(post) = posts.get_post(pid.into_inner()) {
-       HttpResponse::Ok().body(post_file.replace("{{post_name}}",&post.name).replace("{{post_text}}",&post.text).replace("{{post_date}}",&post.date).replace("{{author_name}}",YOUR_NAME))
+       HttpResponse::Ok().body(post_file.replace("{{post_name}}",&post.name).replace("{{post_text}}",&post.html_text).replace("{{post_date}}",&post.date).replace("{{author_name}}",YOUR_NAME))
     } else {
       HttpResponse::Ok().body("Post with this id does not exist")
     }
@@ -55,6 +55,7 @@ async fn add_post(form: web::Form<AddPost>, posts: web::Data<Posts>) -> HttpResp
       id: 0,
       name: form.name.to_string(),
       text: form.text.to_string(),
+      html_text: form.text.to_string(),
       date: form.date.to_string(),
    });
    HttpResponse::Ok().body(format!("Added {} to database",&form.name))
@@ -74,6 +75,7 @@ async fn modify_post(form: web::Form<ModPost>, posts: web::Data<Posts>) -> HttpR
        id: form.id,
        name: form.name.to_string(),
        text: form.text.to_string(),
+       html_text: form.text.to_string(),
        date: form.date.to_string(),
     });
     HttpResponse::Ok().body(format!("Modified {} post in database",form.id))
