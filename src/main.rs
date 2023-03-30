@@ -1,8 +1,11 @@
 use actix_web::{get, post, App, web, HttpResponse, HttpServer};
 use std::fs;
+use std::sync::{Arc, Mutex};
 use serde::Deserialize;
 mod posts;
 use posts::{Posts, Post};
+mod users;
+use users::User;
 
 static YOUR_NAME: &str = "Hubert";
 static YOUR_DESCRIPTION: &str = "test description, which is a placeholder";
@@ -44,25 +47,31 @@ async fn get_post(pid: actix_web::web::Path<usize>, posts: web::Data<Posts>) -> 
 
 #[derive(Deserialize)]
 struct AddPost {
+   api_key: String,
    name: String,
    text: String,
    date: String,
 }
 
 #[post("/api/addPost")]
-async fn add_post(form: web::Form<AddPost>, posts: web::Data<Posts>) -> HttpResponse {
-   posts.push_post(Post {
+async fn add_post(form: web::Form<AddPost>, posts: web::Data<Posts>,  user: web::Data<Arc<Mutex<User>>>) -> HttpResponse {
+   if user.lock().unwrap().validate_key(form.api_key.to_string()) {
+      posts.push_post(Post {
       id: 0,
       name: form.name.to_string(),
       text: form.text.to_string(),
       html_text: form.text.to_string(),
       date: form.date.to_string(),
-   });
-   HttpResponse::Ok().body(format!("Added {} to database",&form.name))
+      });
+      HttpResponse::Ok().body(format!("Added {} to database",&form.name))
+   } else {
+      HttpResponse::Ok().body("Api key is not correct")
+   }
 }
 
 #[derive(Deserialize)]
 struct ModPost {
+   api_key: String,
    id: usize,
    name: String,
    text: String,
@@ -70,26 +79,69 @@ struct ModPost {
 }
 
 #[post("/api/editPost")]
-async fn modify_post(form: web::Form<ModPost>, posts: web::Data<Posts>) -> HttpResponse {
-    posts.edit_post(Post {
-       id: form.id,
-       name: form.name.to_string(),
-       text: form.text.to_string(),
-       html_text: form.text.to_string(),
-       date: form.date.to_string(),
-    });
-    HttpResponse::Ok().body(format!("Modified {} post in database",form.id))
+async fn modify_post(form: web::Form<ModPost>, posts: web::Data<Posts>,  user: web::Data<Arc<Mutex<User>>>) -> HttpResponse {
+    if user.lock().unwrap().validate_key(form.api_key.to_string()) {
+       posts.edit_post(Post {
+          id: form.id,
+          name: form.name.to_string(),
+          text: form.text.to_string(),
+          html_text: form.text.to_string(),
+          date: form.date.to_string(),
+       });
+       HttpResponse::Ok().body(format!("Modified {} post in database",form.id))
+    } else {
+       HttpResponse::Ok().body("Api key is not correct")
+    }
 }
 
 #[derive(Deserialize)]
 struct RmPost {
+   api_key: String,
    id: usize,
 }
 
 #[post("/api/removePost")]
-async fn remove_post(form: web::Form<RmPost>, posts: web::Data<Posts>) -> HttpResponse {
-    posts.rm_post(form.id);
-    HttpResponse::Ok().body(format!("Post with id {} has been removed",form.id))
+async fn remove_post(form: web::Form<RmPost>, posts: web::Data<Posts>,  user: web::Data<Arc<Mutex<User>>>) -> HttpResponse {
+    if user.lock().unwrap().validate_key(form.api_key.to_string()) {
+       posts.rm_post(form.id);
+       HttpResponse::Ok().body(format!("Post with id {} has been removed",form.id))
+    } else {
+       HttpResponse::Ok().body("Api key is not correct")
+    }
+}
+
+#[derive(Deserialize)]
+struct Login {
+    login: String,
+    password: String,
+}
+
+#[post("/api/genKey")]
+async fn generate_key(form: web::Form<Login>, user: web::Data<Arc<Mutex<User>>>) -> HttpResponse {
+   if user.lock().unwrap().validate(form.login.to_string(), form.password.to_string()) {
+      HttpResponse::Ok().body(user.lock().unwrap().new_key())
+   }
+   else {
+      HttpResponse::Ok().body("Login or password is incorrect")
+   }
+}
+
+#[derive(Deserialize)]
+struct RmKey {
+   login: String,
+   password: String,
+   key_id: usize,
+}
+
+#[post("/api/rmKey")]
+async fn remove_key(form: web::Form<RmKey>, user: web::Data<Arc<Mutex<User>>>) -> HttpResponse {
+    if user.lock().unwrap().validate(form.login.to_string(), form.password.to_string()) {
+       user.lock().unwrap().remove_key(form.key_id);
+       HttpResponse::Ok().body(format!("Key with id {} has been removed",form.key_id))
+    }
+    else {
+       HttpResponse::Ok().body("Key at this id does not exist")
+    }
 }
 
 #[get("/css/main.css")]
@@ -102,15 +154,19 @@ async fn css_main() -> HttpResponse {
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     let posts = web::Data::new(Posts::new());
+    let user = web::Data::new(Arc::new(Mutex::new(User::new())));
     HttpServer::new(move || {
         App::new()
 	    .app_data(posts.clone())
+	    .app_data(user.clone())
             .service(index)
             .service(list_posts)
             .service(get_post)
             .service(add_post)
             .service(modify_post)
             .service(remove_post)
+	    .service(generate_key)
+	    .service(remove_key)
             .service(css_main)
     })
     .bind(("0.0.0.0", 1337))?

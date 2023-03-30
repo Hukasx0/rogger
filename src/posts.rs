@@ -20,7 +20,7 @@ impl Posts {
 
    pub fn get_list(&self) -> Vec<Post> {
       let posts = self.posts.lock().unwrap();
-      return posts.iter().cloned().collect();
+      posts.iter().cloned().collect()
    }
 
    pub fn get_post(&self, id: usize) -> Option<Post> {
