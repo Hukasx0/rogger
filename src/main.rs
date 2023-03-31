@@ -1,5 +1,4 @@
 use actix_web::{get, post, App, web, HttpResponse, HttpServer};
-use std::fs;
 use std::sync::{Arc, Mutex};
 use serde::Deserialize;
 mod posts;
@@ -12,15 +11,13 @@ static YOUR_DESCRIPTION: &str = "test description, which is a placeholder";
 
 #[get("/")]
 async fn index() -> HttpResponse {
-    let index_file = fs::read_to_string("web/index.html")
-    .expect("Problem with reading index.html file");
-    HttpResponse::Ok().body(index_file.replace("{{author_name}}",YOUR_NAME).replace("{{author_description}}",YOUR_DESCRIPTION))
+    let index_file = include_str!("../web/index.html").replace("{{author_name}}",YOUR_NAME).replace("{{author_description}}",YOUR_DESCRIPTION);
+    HttpResponse::Ok().body(index_file)
 }
 
 #[get("/posts")]
 async fn list_posts(posts: web::Data<Posts>) -> HttpResponse {
-    let posts_file = fs::read_to_string("web/posts.html")
-    .expect("Problem with reading posts.html file");
+    let posts_file = include_str!("../web/posts.html");
     let mut post_list = String::new();
     for post in posts.get_list().iter().rev() {
     	post_list.push_str(&format!(r#"
@@ -36,8 +33,7 @@ async fn list_posts(posts: web::Data<Posts>) -> HttpResponse {
 
 #[get("/post/{pid}")]
 async fn get_post(pid: actix_web::web::Path<usize>, posts: web::Data<Posts>) -> HttpResponse {
-    let post_file = fs::read_to_string("web/post.html")
-    .expect("Problem with reading post.html file");
+    let post_file = include_str!("../web/post.html");
     if let Some(post) = posts.get_post(pid.into_inner()) {
        HttpResponse::Ok().body(post_file.replace("{{post_name}}",&post.name).replace("{{post_text}}",&post.html_text).replace("{{post_date}}",&post.date).replace("{{author_name}}",YOUR_NAME))
     } else {
@@ -146,8 +142,7 @@ async fn remove_key(form: web::Form<RmKey>, user: web::Data<Arc<Mutex<User>>>) -
 
 #[get("/css/main.css")]
 async fn css_main() -> HttpResponse {
-    let css_file = fs::read_to_string("web/css/main.css")
-    .expect("Problem with reading main.css file");
+    let css_file = include_str!("../web/css/main.css");
     HttpResponse::Ok().body(css_file)
 }
 

@@ -13,7 +13,7 @@ impl User {
         let mut hasher = Sha256::new();
         hasher.update("pass123");
         User { login: "admin".to_string(),
-	       password_hash: format!("{:x}",hasher.finalize()), //Base64Bcrypt::encode(hasher.finalize()),
+	       password_hash: format!("{:x}",hasher.finalize()),
 	       keys: Vec::new(),
 	}
      }
