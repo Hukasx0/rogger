@@ -108,35 +108,33 @@ async fn remove_post(form: web::Form<RmPost>, posts: web::Data<Posts>,  user: we
 
 #[derive(Deserialize)]
 struct Login {
-    login: String,
-    password: String,
+    master_key: String,
 }
 
 #[post("/api/genKey")]
 async fn generate_key(form: web::Form<Login>, user: web::Data<Arc<Mutex<User>>>) -> HttpResponse {
-   if user.lock().unwrap().validate(form.login.to_string(), form.password.to_string()) {
+   if user.lock().unwrap().validate(form.master_key.to_string()) {
       HttpResponse::Ok().body(user.lock().unwrap().new_key())
    }
    else {
-      HttpResponse::Ok().body("Login or password is incorrect")
+      HttpResponse::Ok().body("Your Masterkey is not correct")
    }
 }
 
 #[derive(Deserialize)]
 struct RmKey {
-   login: String,
-   password: String,
+   master_key: String,
    key_id: usize,
 }
 
 #[post("/api/rmKey")]
 async fn remove_key(form: web::Form<RmKey>, user: web::Data<Arc<Mutex<User>>>) -> HttpResponse {
-    if user.lock().unwrap().validate(form.login.to_string(), form.password.to_string()) {
+    if user.lock().unwrap().validate(form.master_key.to_string()) {
        user.lock().unwrap().remove_key(form.key_id);
        HttpResponse::Ok().body(format!("Key with id {} has been removed",form.key_id))
     }
     else {
-       HttpResponse::Ok().body("Key at this id does not exist")
+       HttpResponse::Ok().body("Your Masterkey is not correct")
     }
 }
 

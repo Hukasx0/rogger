@@ -1,28 +1,26 @@
-use sha2::{Sha256, Digest};
+use sha2::{Sha256, Sha512, Digest};
 use rand::distributions::{Alphanumeric, DistString};
 
 #[derive(Clone)]
 pub struct User {
-    login: String,
-    password_hash: String,
+    master_key: String,
     keys: Vec<String>,
 }
 
 impl User {
      pub fn new() -> Self {
-        let mut hasher = Sha256::new();
-        hasher.update("pass123");
-        User { login: "admin".to_string(),
-	       password_hash: format!("{:x}",hasher.finalize()),
+        let rng_str: String = Alphanumeric.sample_string(&mut rand::thread_rng(), 32);
+        let mut hasher = Sha512::new();
+        hasher.update(rng_str);
+	let master_hash = hasher.finalize();
+	println!("Your master key (never show it to anyone)\n{:x}", master_hash);
+        User { master_key: format!("{:x}",master_hash),
 	       keys: Vec::new(),
 	}
      }
 
-     pub fn validate(&self, login: String, password: String) -> bool {
-         let mut hasher = Sha256::new();
-         hasher.update(password);
-     	 if self.login == login
-	     && self.password_hash == format!("{:x}",hasher.finalize()) {
+     pub fn validate(&self, master_key: String) -> bool {
+     	 if self.master_key == master_key {
 	    true
 	 }
 	 else {
