@@ -22,11 +22,11 @@ async fn list_posts(posts: web::Data<Posts>) -> HttpResponse {
     for post in posts.get_list().iter().rev() {
     	post_list.push_str(&format!(r#"
 	<div class="post">
-	   <a href="/post/{}"<h2 class="title">{}</h2></a>
+	   <a href="/post/{}"<h2 class="title"><b>{}</b></h2></a>
 	   <p class="description">{}</p>
 	   <span class="date">{}</span>
 	</div>
-	"#,post.id ,post.name, post.text, post.date));
+	"#,post.id ,post.name, format!("{}...<br><a href=\"/post/{}\"><b>Read more</b></a>", post.text.chars().take(355).collect::<String>(), post.id), post.date));
     }
     HttpResponse::Ok().body(posts_file.replace("{{author_name}}",YOUR_NAME).replace("{{post_list}}",&post_list))
 }

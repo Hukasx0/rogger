@@ -61,7 +61,7 @@ a {
 .post {
     margin: 15px;
     padding: 15px;
-    width: 500px;
+    width: 100%; /* 500px; */
     height: 250px;
     text-align: center;
     border: 1px solid var(--button-background-color);
@@ -74,7 +74,7 @@ a {
 
 .post .description {
     font-size: 1rem;
-    margin-bottom: 10%;
+    margin-bottom: 5%;
 }
 
 .post .date {
