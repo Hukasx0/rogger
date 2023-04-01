@@ -138,6 +138,31 @@ async fn remove_key(form: web::Form<RmKey>, user: web::Data<Arc<Mutex<User>>>) -
     }
 }
 
+#[derive(Deserialize)]
+struct BackupDB {
+   master_key: String,
+}
+
+#[post("/api/backup")]
+async fn save_posts(form: web::Form<BackupDB>, posts: web::Data<Posts>, user: web::Data<Arc<Mutex<User>>>) -> HttpResponse {
+   if user.lock().unwrap().validate(form.master_key.to_string()) {
+      posts.save_db();
+      HttpResponse::Ok().body("Database has been saved")
+   } else {
+      HttpResponse::Ok().body("Your Masterkey is not correct")
+   }
+}
+
+#[post("/api/load_backup")]
+async fn load_posts(form: web::Form<BackupDB>, posts: web::Data<Posts>, user: web::Data<Arc<Mutex<User>>>) -> HttpResponse {
+   if user.lock().unwrap().validate(form.master_key.to_string()) { 
+      posts.load_db();
+      HttpResponse::Ok().body("Database has been loaded from a file")
+   } else {
+      HttpResponse::Ok().body("Your Masterkey is not correct")
+   }
+}
+	
 #[get("/css/main.css")]
 async fn css_main() -> HttpResponse {
     let css_file = include_str!("../web/css/main.css");
@@ -147,6 +172,8 @@ async fn css_main() -> HttpResponse {
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     let posts = web::Data::new(Posts::new());
+    Posts::db_check_create();
+    posts.load_db();
     let user = web::Data::new(Arc::new(Mutex::new(User::new())));
     HttpServer::new(move || {
         App::new()
@@ -161,6 +188,8 @@ async fn main() -> std::io::Result<()> {
 	    .service(generate_key)
 	    .service(remove_key)
             .service(css_main)
+	    .service(save_posts)
+	    .service(load_posts)
     })
     .bind(("0.0.0.0", 1337))?
     .run()
