@@ -1,92 +1,79 @@
-use std::sync::{Arc, Mutex};
-use std::fs::{File, OpenOptions};
-use std::io::{Read, Write};
 use serde::{Serialize, Deserialize};
-use bincode::{serialize};
+use rusqlite::{Connection, Result};
+
+pub struct Database {}
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Post {
    pub id: usize,
-   pub name: String,
-   pub text: String,
-   pub html_text: String,
+   pub title: String,
+   pub content: String,
+   pub html_content: String,
    pub date: String,
 }
 
-pub struct Posts {
-   posts: Arc<Mutex<Vec<Post>>>,
-}
-
-impl Posts {
-   pub fn new() -> Self {
-      Posts { posts: Arc::new(Mutex::new(Vec::new())) }
+impl Database {
+   pub fn new() -> Result<usize> {
+      let con = Connection::open("rogger.db")?;
+      Ok(con.execute("
+         CREATE TABLE IF NOT EXISTS posts (
+	    id INTEGER PRIMARY KEY,
+	    title TEXT NOT NULL,
+	    content TEXT NOT NULL,
+	    html_content TEXT NOT NULL,
+	    date DATE NOT NULL
+	 )", [], )?)
    }
 
-   pub fn db_check_create() {
-      let db_file = OpenOptions::new()
-      	  	    .write(true)
-		    .create_new(true)
-		    .open("rogger.bin");
-      match db_file {
-         Ok(_) => drop(db_file),
-	 Err(e) => println!("Error while creating database file {:?}", e),
-      };
+   pub fn get_list(con: Connection, page: usize) -> Result<Vec<Post>> {
+      let mut posts_db = con.prepare("SELECT id, title, content, html_content, date FROM posts ORDER BY id DESC LIMIT 10 OFFSET ?")?;
+      let posts_iter = posts_db.query_map([page*10], |row| {
+         Ok(Post {
+ 	    id: row.get(0)?,
+	    title: row.get(1)?,
+	    content: row.get(2)?,
+	    html_content: row.get(3)?,
+	    date: row.get(4)?,
+	 })
+      })?;
+      let mut posts = Vec::new();
+      for posts_fin in posts_iter {
+         posts.push(posts_fin?);
+      }
+      Ok(posts)
    }
 
-   pub fn save_db(&self) {
-      let posts = self.posts.lock().unwrap();
-      let encoded_data: Vec<u8> = serialize(&*posts).unwrap();
-      let mut db_file = File::create("rogger.bin").unwrap();
-      db_file.write_all(&encoded_data).unwrap();
+   pub fn get_post(con: Connection, id: usize) -> Result<Option<Post>> {
+      let mut posts_db = con.prepare("SELECT id, title, content, html_content, date FROM posts WHERE id = ?")?;
+      let mut query = posts_db.query([id])?;
+      if let Some(row) = query.next()? {
+         Ok(Some(Post {
+	    id: row.get(0)?,
+	    title: row.get(1)?,
+	    content: row.get(2)?,
+	    html_content: row.get(3)?,
+	    date: row.get(4)?,
+	 }))
+      } else {
+         Ok(None)
+      }
    }
 
-   pub fn load_db(&self) {
-      let mut db_file = File::open("rogger.bin").unwrap();
-      let mut encoded_data = Vec::new();
-      db_file.read_to_end(&mut encoded_data).unwrap();
-      let posts = bincode::deserialize(&encoded_data);
-      match posts {
-         Ok(r) => *self.posts.lock().unwrap() = r,
-	 Err(_) => println!("Database is empty"),
-      };
+   pub fn push_post(con: Connection, title: &str, content_md: &str) -> Result<i64> {
+       let mut posts_db = con.prepare("INSERT INTO posts (id, title, content, html_content, date) VALUES (NULL, ?, ?, ?, date('now'))")?;
+       posts_db.execute([title, content_md, &markdown::to_html(content_md)]);
+       Ok(con.last_insert_rowid())
    }
 
-   pub fn get_list(&self) -> Vec<Post> {
-      let posts = self.posts.lock().unwrap();
-      posts.iter().cloned().collect()
+   pub fn edit_post(con: Connection, id: usize, title: &str, content_md: &str) -> Result<()> {
+       let mut posts_db = con.prepare("UPDATE posts SET title = ?, content = ?, html_content = ?, date = date('now') WHERE id = ?")?;
+       posts_db.execute([title, content_md, &markdown::to_html(content_md), &id.to_string()])?;
+       Ok(())
    }
 
-   pub fn get_post(&self, id: usize) -> Option<Post> {
-      let posts = self.posts.lock().unwrap();
-      posts.iter().find(|post| post.id == id).cloned()
-   }
-
-   pub fn push_post(&self, post: Post) {
-       let mut posts = self.posts.lock().unwrap();
-       let posts_len = posts.len();
-       let mut last_post_id: usize = 0;
-       if posts_len > 0 {
-          last_post_id = &posts[posts_len-1].id+1;
-       }
-       posts.push(Post {
-          id: last_post_id,
-	  name: post.name,
-	  text: post.text,
-	  html_text: markdown::to_html(&post.html_text),
-	  date: post.date,
-       });
-   }
-
-   pub fn edit_post(&self, mut post: Post) {
-       let mut posts = self.posts.lock().unwrap();
-       if let Some(post_to_update) = posts.iter_mut().find(|cpost| cpost.id == post.id) {
-           post.html_text = markdown::to_html(&post.html_text);
-          *post_to_update = post;
-       }
-   }
-
-   pub fn rm_post(&self, id: usize) {
-       let mut posts = self.posts.lock().unwrap();
-       posts.retain(|post| post.id != id);
+   pub fn rm_post(con: Connection, id: usize) -> Result<()> {
+       let mut posts_db = con.prepare("DELETE FROM posts WHERE id = ?")?;
+       posts_db.execute([id])?;
+       Ok(())
    }
 }

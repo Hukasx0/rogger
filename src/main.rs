@@ -1,8 +1,9 @@
 use actix_web::{get, post, App, web, HttpResponse, HttpServer};
 use std::sync::{Arc, Mutex};
 use serde::Deserialize;
+use rusqlite::Connection;
 mod posts;
-use posts::{Posts, Post};
+use posts::Database;
 mod users;
 use users::User;
 
@@ -16,26 +17,32 @@ async fn index() -> HttpResponse {
 }
 
 #[get("/posts")]
-async fn list_posts(posts: web::Data<Posts>) -> HttpResponse {
+async fn list_posts() -> HttpResponse {
+    let con = Connection::open("rogger.db").unwrap();
     let posts_file = include_str!("../web/posts.html");
     let mut post_list = String::new();
-    for post in posts.get_list().iter().rev() {
+    if let Ok(posts_vec) = Database::get_list(con ,0) {
+    for post in posts_vec {
     	post_list.push_str(&format!(r#"
 	<div class="post">
 	   <a href="/post/{}"<h2 class="title"><b>{}</b></h2></a>
 	   <p class="description">{}</p>
 	   <span class="date">{}</span>
 	</div>
-	"#,post.id ,post.name, format!("{}...<br><a href=\"/post/{}\"><b>Read more</b></a>", post.text.chars().take(355).collect::<String>(), post.id), post.date));
+	"#,post.id ,post.title, format!("{}...<br><a href=\"/post/{}\"><b>Read more</b></a>", post.content.chars().take(355).collect::<String>(), post.id), post.date));
     }
     HttpResponse::Ok().body(posts_file.replace("{{author_name}}",YOUR_NAME).replace("{{post_list}}",&post_list))
+    } else {
+     HttpResponse::Ok().body("Cannot find posts with this id")
+    }
 }
 
 #[get("/post/{pid}")]
-async fn get_post(pid: actix_web::web::Path<usize>, posts: web::Data<Posts>) -> HttpResponse {
+async fn get_post(pid: actix_web::web::Path<usize>) -> HttpResponse {
+    let con = Connection::open("rogger.db").unwrap();
     let post_file = include_str!("../web/post.html");
-    if let Some(post) = posts.get_post(pid.into_inner()) {
-       HttpResponse::Ok().body(post_file.replace("{{post_name}}",&post.name).replace("{{post_text}}",&post.html_text).replace("{{post_date}}",&post.date).replace("{{author_name}}",YOUR_NAME))
+    if let Ok(Some(post)) = Database::get_post(con, pid.into_inner()) {
+       HttpResponse::Ok().body(post_file.replace("{{post_name}}",&post.title).replace("{{post_text}}",&post.html_content).replace("{{post_date}}",&post.date).replace("{{author_name}}",YOUR_NAME))
     } else {
       HttpResponse::Ok().body("Post with this id does not exist")
     }
@@ -46,19 +53,13 @@ struct AddPost {
    api_key: String,
    name: String,
    text: String,
-   date: String,
 }
 
 #[post("/api/addPost")]
-async fn add_post(form: web::Form<AddPost>, posts: web::Data<Posts>,  user: web::Data<Arc<Mutex<User>>>) -> HttpResponse {
+async fn add_post(form: web::Form<AddPost>,  user: web::Data<Arc<Mutex<User>>>) -> HttpResponse {
    if user.lock().unwrap().validate_key(form.api_key.to_string()) {
-      posts.push_post(Post {
-      id: 0,
-      name: form.name.to_string(),
-      text: form.text.to_string(),
-      html_text: form.text.to_string(),
-      date: form.date.to_string(),
-      });
+      let con = Connection::open("rogger.db").unwrap();
+      Database::push_post(con, &form.name, &form.text);
       HttpResponse::Ok().body(format!("Added {} to database",&form.name))
    } else {
       HttpResponse::Ok().body("Api key is not correct")
@@ -71,19 +72,13 @@ struct ModPost {
    id: usize,
    name: String,
    text: String,
-   date: String,
 }
 
 #[post("/api/editPost")]
-async fn modify_post(form: web::Form<ModPost>, posts: web::Data<Posts>,  user: web::Data<Arc<Mutex<User>>>) -> HttpResponse {
+async fn modify_post(form: web::Form<ModPost>,  user: web::Data<Arc<Mutex<User>>>) -> HttpResponse {
     if user.lock().unwrap().validate_key(form.api_key.to_string()) {
-       posts.edit_post(Post {
-          id: form.id,
-          name: form.name.to_string(),
-          text: form.text.to_string(),
-          html_text: form.text.to_string(),
-          date: form.date.to_string(),
-       });
+       let con = Connection::open("rogger.db").unwrap();
+       Database::edit_post(con, form.id, &form.name, &form.text);
        HttpResponse::Ok().body(format!("Modified {} post in database",form.id))
     } else {
        HttpResponse::Ok().body("Api key is not correct")
@@ -97,9 +92,10 @@ struct RmPost {
 }
 
 #[post("/api/removePost")]
-async fn remove_post(form: web::Form<RmPost>, posts: web::Data<Posts>,  user: web::Data<Arc<Mutex<User>>>) -> HttpResponse {
+async fn remove_post(form: web::Form<RmPost>,  user: web::Data<Arc<Mutex<User>>>) -> HttpResponse {
     if user.lock().unwrap().validate_key(form.api_key.to_string()) {
-       posts.rm_post(form.id);
+       let con = Connection::open("rogger.db").unwrap();
+       Database::rm_post(con, form.id);
        HttpResponse::Ok().body(format!("Post with id {} has been removed",form.id))
     } else {
        HttpResponse::Ok().body("Api key is not correct")
@@ -138,31 +134,6 @@ async fn remove_key(form: web::Form<RmKey>, user: web::Data<Arc<Mutex<User>>>) -
     }
 }
 
-#[derive(Deserialize)]
-struct BackupDB {
-   master_key: String,
-}
-
-#[post("/api/backup")]
-async fn save_posts(form: web::Form<BackupDB>, posts: web::Data<Posts>, user: web::Data<Arc<Mutex<User>>>) -> HttpResponse {
-   if user.lock().unwrap().validate(form.master_key.to_string()) {
-      posts.save_db();
-      HttpResponse::Ok().body("Database has been saved")
-   } else {
-      HttpResponse::Ok().body("Your Masterkey is not correct")
-   }
-}
-
-#[post("/api/load_backup")]
-async fn load_posts(form: web::Form<BackupDB>, posts: web::Data<Posts>, user: web::Data<Arc<Mutex<User>>>) -> HttpResponse {
-   if user.lock().unwrap().validate(form.master_key.to_string()) { 
-      posts.load_db();
-      HttpResponse::Ok().body("Database has been loaded from a file")
-   } else {
-      HttpResponse::Ok().body("Your Masterkey is not correct")
-   }
-}
-	
 #[get("/css/main.css")]
 async fn css_main() -> HttpResponse {
     let css_file = include_str!("../web/css/main.css");
@@ -171,13 +142,10 @@ async fn css_main() -> HttpResponse {
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
-    let posts = web::Data::new(Posts::new());
-    Posts::db_check_create();
-    posts.load_db();
+    Database::new();
     let user = web::Data::new(Arc::new(Mutex::new(User::new())));
     HttpServer::new(move || {
         App::new()
-	    .app_data(posts.clone())
 	    .app_data(user.clone())
             .service(index)
             .service(list_posts)
@@ -188,9 +156,7 @@ async fn main() -> std::io::Result<()> {
 	    .service(generate_key)
 	    .service(remove_key)
             .service(css_main)
-	    .service(save_posts)
-	    .service(load_posts)
-    })
+})
     .bind(("0.0.0.0", 1337))?
     .run()
     .await
