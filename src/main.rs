@@ -1,5 +1,4 @@
 use actix_web::{get, post, App, web, HttpResponse, HttpServer};
-use std::sync::{Arc, Mutex};
 use serde::Deserialize;
 use rusqlite::Connection;
 mod posts;
@@ -65,8 +64,8 @@ struct AddPost {
 }
 
 #[post("/api/addPost")]
-async fn add_post(form: web::Form<AddPost>,  user: web::Data<Arc<Mutex<User>>>) -> HttpResponse {
-   if user.lock().unwrap().validate_key(form.api_key.to_string()) {
+async fn add_post(form: web::Form<AddPost>) -> HttpResponse {
+   if User::validate_key(form.api_key.to_string()) {
       let con = Connection::open("rogger.db").unwrap();
       Database::push_post(con, &form.name, &form.text);
       HttpResponse::Ok().body(format!("Added {} to database",&form.name))
@@ -84,8 +83,8 @@ struct ModPost {
 }
 
 #[post("/api/editPost")]
-async fn modify_post(form: web::Form<ModPost>,  user: web::Data<Arc<Mutex<User>>>) -> HttpResponse {
-    if user.lock().unwrap().validate_key(form.api_key.to_string()) {
+async fn modify_post(form: web::Form<ModPost>) -> HttpResponse {
+    if User::validate_key(form.api_key.to_string()) {
        let con = Connection::open("rogger.db").unwrap();
        Database::edit_post(con, form.id, &form.name, &form.text);
        HttpResponse::Ok().body(format!("Modified {} post in database",form.id))
@@ -101,8 +100,8 @@ struct RmPost {
 }
 
 #[post("/api/removePost")]
-async fn remove_post(form: web::Form<RmPost>,  user: web::Data<Arc<Mutex<User>>>) -> HttpResponse {
-    if user.lock().unwrap().validate_key(form.api_key.to_string()) {
+async fn remove_post(form: web::Form<RmPost>) -> HttpResponse {
+    if User::validate_key(form.api_key.to_string()) {
        let con = Connection::open("rogger.db").unwrap();
        Database::rm_post(con, form.id);
        HttpResponse::Ok().body(format!("Post with id {} has been removed",form.id))
@@ -113,34 +112,18 @@ async fn remove_post(form: web::Form<RmPost>,  user: web::Data<Arc<Mutex<User>>>
 
 #[derive(Deserialize)]
 struct Login {
-    master_key: String,
+    login: String,
+    password: String,
 }
 
 #[post("/api/genKey")]
-async fn generate_key(form: web::Form<Login>, user: web::Data<Arc<Mutex<User>>>) -> HttpResponse {
-   if user.lock().unwrap().validate(form.master_key.to_string()) {
-      HttpResponse::Ok().body(user.lock().unwrap().new_key())
+async fn generate_key(form: web::Form<Login>) -> HttpResponse {
+   if User::validate(form.login.to_string(), form.password.to_string()) {
+      HttpResponse::Ok().body(User::new_key())
    }
    else {
-      HttpResponse::Ok().body("Your Masterkey is not correct")
+      HttpResponse::Ok().body("Your login credentials are not correct")
    }
-}
-
-#[derive(Deserialize)]
-struct RmKey {
-   master_key: String,
-   key_id: usize,
-}
-
-#[post("/api/rmKey")]
-async fn remove_key(form: web::Form<RmKey>, user: web::Data<Arc<Mutex<User>>>) -> HttpResponse {
-    if user.lock().unwrap().validate(form.master_key.to_string()) {
-       user.lock().unwrap().remove_key(form.key_id);
-       HttpResponse::Ok().body(format!("Key with id {} has been removed",form.key_id))
-    }
-    else {
-       HttpResponse::Ok().body("Your Masterkey is not correct")
-    }
 }
 
 #[get("/css/main.css")]
@@ -152,10 +135,9 @@ async fn css_main() -> HttpResponse {
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     Database::new();
-    let user = web::Data::new(Arc::new(Mutex::new(User::new())));
+    User::init_master();
     HttpServer::new(move || {
         App::new()
-	    .app_data(user.clone())
             .service(index)
             .service(list_posts)
             .service(get_post)
@@ -163,7 +145,6 @@ async fn main() -> std::io::Result<()> {
             .service(modify_post)
             .service(remove_post)
 	    .service(generate_key)
-	    .service(remove_key)
             .service(css_main)
 })
     .bind(("0.0.0.0", 1337))?
