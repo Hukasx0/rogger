@@ -16,6 +16,7 @@ impl User {
 	let master_hash = hasher.finalize();
 	let _: () = con.hset("users", username, format!("{:x}", master_hash)).unwrap();
 	let _: () = con.del("keys").unwrap();
+        let _: () = con.del("sessions").unwrap();
      }
 
      pub fn validate(login: String, password: String) -> bool {
@@ -52,14 +53,23 @@ impl User {
 	 format!("{:x}", key_hash)
      }
 
-     pub fn validate_key(api_key: String) -> bool {
+     pub fn validate_key(api_key: String, typev: &str) -> bool {
         let client = Client::open("redis://127.0.0.1").unwrap();
 	let mut con = client.get_connection().unwrap();
 	let options = LposOptions::default();
-	let key_index: Option<i32> = con.lpos("keys", api_key, options).unwrap();
+	let key_index: Option<i32> = con.lpos(typev, api_key, options).unwrap();
      	match key_index {
 	   Some(_) => true,
 	   None => false,
 	}
+     }
+
+     pub fn new_session() -> String {
+         let rng_str: String = Alphanumeric.sample_string(&mut rand::thread_rng(), 48);
+     	 let client = Client::open("redis://127.0.0.1").unwrap();
+	 let mut con = client.get_connection().unwrap();
+	 let _: () = con.rpush("sessions", rng_str.to_string()).unwrap();
+	 let _: () = con.expire(rng_str.to_string(), 600).unwrap();
+	 rng_str.to_string()   
      }
 }

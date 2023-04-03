@@ -1,4 +1,4 @@
-use actix_web::{get, post, App, web, HttpResponse, HttpServer};
+use actix_web::{get, post, App, web, HttpResponse, HttpServer, HttpRequest, cookie::Cookie};
 use serde::Deserialize;
 use rusqlite::Connection;
 mod posts;
@@ -56,6 +56,41 @@ async fn get_post(pid: actix_web::web::Path<usize>) -> HttpResponse {
     }
 }
 
+#[get("/cms/login")]
+async fn cms_login_site() -> HttpResponse {
+   HttpResponse::Ok().body(include_str!("../web/cms/login.html").to_string())
+}
+
+#[derive(Deserialize)]
+struct CmsLogin {
+   login: String,
+   password: String,
+}
+
+
+#[post("/cms/login")]
+async fn cms_login(form: web::Form<CmsLogin>) -> HttpResponse {
+   if User::validate(form.login.to_string(), form.password.to_string()) {
+      let session_cookie = Cookie::new("session", User::new_session());
+      HttpResponse::Ok().cookie(session_cookie).body("Successfully logged in")
+   } else {
+      HttpResponse::Ok().body("Wrong credentials")
+   }   
+}
+
+#[get("/cms")]
+async fn cms(req: HttpRequest) -> HttpResponse {
+   if let Some(cookie) = req.cookie("session") {
+      if User::validate_key(cookie.value().to_string(), "sessions") {
+         HttpResponse::Ok().body("Correct session id! welcome")
+      } else {
+         HttpResponse::Ok().body("Incorrect session id")
+      }
+   } else {
+     HttpResponse::Ok().body("You need to log in")
+   }
+}
+
 #[derive(Deserialize)]
 struct AddPost {
    api_key: String,
@@ -65,7 +100,7 @@ struct AddPost {
 
 #[post("/api/addPost")]
 async fn add_post(form: web::Form<AddPost>) -> HttpResponse {
-   if User::validate_key(form.api_key.to_string()) {
+   if User::validate_key(form.api_key.to_string(), "keys") {
       let con = Connection::open("rogger.db").unwrap();
       Database::push_post(con, &form.name, &form.text);
       HttpResponse::Ok().body(format!("Added {} to database",&form.name))
@@ -84,7 +119,7 @@ struct ModPost {
 
 #[post("/api/editPost")]
 async fn modify_post(form: web::Form<ModPost>) -> HttpResponse {
-    if User::validate_key(form.api_key.to_string()) {
+    if User::validate_key(form.api_key.to_string(), "keys") {
        let con = Connection::open("rogger.db").unwrap();
        Database::edit_post(con, form.id, &form.name, &form.text);
        HttpResponse::Ok().body(format!("Modified {} post in database",form.id))
@@ -101,7 +136,7 @@ struct RmPost {
 
 #[post("/api/removePost")]
 async fn remove_post(form: web::Form<RmPost>) -> HttpResponse {
-    if User::validate_key(form.api_key.to_string()) {
+    if User::validate_key(form.api_key.to_string(), "keys") {
        let con = Connection::open("rogger.db").unwrap();
        Database::rm_post(con, form.id);
        HttpResponse::Ok().body(format!("Post with id {} has been removed",form.id))
@@ -146,6 +181,9 @@ async fn main() -> std::io::Result<()> {
             .service(remove_post)
 	    .service(generate_key)
             .service(css_main)
+	    .service(cms)
+	    .service(cms_login)
+	    .service(cms_login_site)
 })
     .bind(("0.0.0.0", 1337))?
     .run()
