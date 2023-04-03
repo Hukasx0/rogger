@@ -69,7 +69,7 @@ a {
 
 .post .title {
     font-size: 1.5rem;
-    margin-bottom: 10%;
+    margin-bottom: 5%;
 }
 
 .post .description {
@@ -101,4 +101,15 @@ a {
 
 .fpost .date {
     font-size: 1em;
+}
+
+footer {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 0.8em;
+}
+
+footer a {
+    color: white;
 }

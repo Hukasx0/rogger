@@ -16,16 +16,25 @@ async fn index() -> HttpResponse {
     HttpResponse::Ok().body(index_file)
 }
 
-#[get("/posts")]
-async fn list_posts() -> HttpResponse {
+#[get("/posts/{pathid}")]
+async fn list_posts(pathid: actix_web::web::Path<usize>) -> HttpResponse {
     let con = Connection::open("rogger.db").unwrap();
-    let posts_file = include_str!("../web/posts.html");
+    let mut posts_file: String = include_str!("../web/posts.html").to_string();
     let mut post_list = String::new();
-    if let Ok(posts_vec) = Database::get_list(con ,0) {
+    let inner_path = pathid.into_inner();
+    let offset = if inner_path > 1 {
+       posts_file = posts_file.replace("{{counter}}", &format!(r#"<p><a href="/posts/{}">{}</a> <span style="color: rgb(242, 242, 242);">{}</span> <a href="/posts/{}">{}</a></p>"#,
+       			                 	      inner_path-1, inner_path-1, inner_path, inner_path+1, inner_path+1));
+       inner_path
+    } else {
+       posts_file = posts_file.replace("{{counter}}", r#"<p><span style="color: rgb(242, 242, 242);">1</span> <a href="/posts/2">2</a></p>"#);
+       1
+    };
+    if let Ok(posts_vec) = Database::get_list(con , offset-1) {
     for post in posts_vec {
     	post_list.push_str(&format!(r#"
 	<div class="post">
-	   <a href="/post/{}"<h2 class="title"><b>{}</b></h2></a>
+	   <h2 class="title"><a href="/post/{}"><b>{}</b></a></h2>
 	   <p class="description">{}</p>
 	   <span class="date">{}</span>
 	</div>
