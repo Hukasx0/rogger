@@ -2,9 +2,11 @@ use actix_web::{get, post, App, web, HttpResponse, HttpServer, HttpRequest, cook
 use serde::Deserialize;
 use rusqlite::Connection;
 mod posts;
-use posts::Database;
+use posts::{Database, Post};
 mod users;
 use users::User;
+mod cache;
+use cache::Cache;
 
 static YOUR_NAME: &str = "Hubert";
 static YOUR_DESCRIPTION: &str = "test description, which is a placeholder";
@@ -16,7 +18,7 @@ async fn index() -> HttpResponse {
 }
 
 #[get("/posts/{pathid}")]
-async fn list_posts(pathid: actix_web::web::Path<usize>) -> HttpResponse {
+async fn list_posts(pathid: actix_web::web::Path<usize>, cache: web::Data<Cache>) -> HttpResponse {
     let con = Connection::open("rogger.db").unwrap();
     let mut posts_file: String = include_str!("../web/posts.html").to_string();
     let mut post_list = String::new();
@@ -29,8 +31,16 @@ async fn list_posts(pathid: actix_web::web::Path<usize>) -> HttpResponse {
        posts_file = posts_file.replace("{{counter}}", r#"<p><span style="color: rgb(242, 242, 242);">1</span> <a href="/posts/2">2</a></p>"#);
        1
     };
-    if let Ok(posts_vec) = Database::get_list(con , offset-1) {
-    for post in posts_vec {
+    let posts: Vec<Post>;
+    if inner_path < 11 {
+	posts = cache.get_posts(inner_path);
+    } else {
+	if let Ok(posts_vec) = Database::get_list(con , offset-1) { posts = posts_vec; }
+	 else {
+	     return HttpResponse::Ok().body("Cannot find posts with this id");
+	 }
+    }
+    for post in posts {
     	post_list.push_str(&format!(r#"
 	<div class="post">
 	   <h2 class="title"><a href="/post/{}"><b>{}</b></a></h2>
@@ -40,20 +50,24 @@ async fn list_posts(pathid: actix_web::web::Path<usize>) -> HttpResponse {
 	"#,post.id ,post.title, format!("{}...<br><a href=\"/post/{}\"><b>Read more</b></a>", post.content.chars().take(355).collect::<String>(), post.id), post.date));
     }
     HttpResponse::Ok().body(posts_file.replace("{{author_name}}",YOUR_NAME).replace("{{post_list}}",&post_list))
-    } else {
-     HttpResponse::Ok().body("Cannot find posts with this id")
-    }
 }
 
 #[get("/post/{pid}")]
-async fn get_post(pid: actix_web::web::Path<usize>) -> HttpResponse {
+async fn get_post(pid: actix_web::web::Path<usize>, cache: web::Data<Cache>) -> HttpResponse {
     let con = Connection::open("rogger.db").unwrap();
     let post_file = include_str!("../web/post.html");
-    if let Ok(Some(post)) = Database::get_post(con, pid.into_inner()) {
-       HttpResponse::Ok().body(post_file.replace("{{post_name}}",&post.title).replace("{{post_text}}",&post.html_content).replace("{{post_date}}",&post.date).replace("{{author_name}}",YOUR_NAME))
+    let inner_pid = pid.into_inner();
+    let post: Post;
+    if inner_pid < 101 {
+	post = cache.get_by_id(inner_pid);
     } else {
-      HttpResponse::Ok().body("Post with this id does not exist")
+	if let Ok(Some(this_post)) = Database::get_post(con, inner_pid) {
+            post = this_post;
+	} else {
+	    return HttpResponse::Ok().body("Post with this id does not exist");
+	}
     }
+       HttpResponse::Ok().body(post_file.replace("{{post_name}}",&post.title).replace("{{post_text}}",&post.html_content).replace("{{post_date}}",&post.date).replace("{{author_name}}",YOUR_NAME))
 }
 
 #[get("/cms/login")]
@@ -99,11 +113,12 @@ struct AddPost {
 }
 
 #[post("/api/addPost")]
-async fn add_post(form: web::Form<AddPost>) -> HttpResponse {
+async fn add_post(form: web::Form<AddPost>, cache: web::Data<Cache>) -> HttpResponse {
    if User::validate_key(form.api_key.to_string(), "keys") {
       let con = Connection::open("rogger.db").unwrap();
-      Database::push_post(con, &form.name, &form.text);
-      HttpResponse::Ok().body(format!("Added {} to database",&form.name))
+       Database::push_post(con, &form.name, &form.text);
+       cache.db_sync();
+       HttpResponse::Ok().body(format!("Added {} to database",&form.name))
    } else {
       HttpResponse::Ok().body("Api key is not correct")
    }
@@ -118,11 +133,12 @@ struct ModPost {
 }
 
 #[post("/api/editPost")]
-async fn modify_post(form: web::Form<ModPost>) -> HttpResponse {
+async fn modify_post(form: web::Form<ModPost>, cache: web::Data<Cache>) -> HttpResponse {
     if User::validate_key(form.api_key.to_string(), "keys") {
        let con = Connection::open("rogger.db").unwrap();
-       Database::edit_post(con, form.id, &form.name, &form.text);
-       HttpResponse::Ok().body(format!("Modified {} post in database",form.id))
+	Database::edit_post(con, form.id, &form.name, &form.text);
+	cache.db_sync();
+        HttpResponse::Ok().body(format!("Modified {} post in database",form.id))
     } else {
        HttpResponse::Ok().body("Api key is not correct")
     }
@@ -135,11 +151,12 @@ struct RmPost {
 }
 
 #[post("/api/removePost")]
-async fn remove_post(form: web::Form<RmPost>) -> HttpResponse {
+async fn remove_post(form: web::Form<RmPost>, cache: web::Data<Cache>) -> HttpResponse {
     if User::validate_key(form.api_key.to_string(), "keys") {
        let con = Connection::open("rogger.db").unwrap();
-       Database::rm_post(con, form.id);
-       HttpResponse::Ok().body(format!("Post with id {} has been removed",form.id))
+	Database::rm_post(con, form.id);
+	cache.db_sync();
+        HttpResponse::Ok().body(format!("Post with id {} has been removed",form.id))
     } else {
        HttpResponse::Ok().body("Api key is not correct")
     }
@@ -171,8 +188,10 @@ async fn css_main() -> HttpResponse {
 async fn main() -> std::io::Result<()> {
     Database::new();
     User::init_master();
+    let cache = web::Data::new(Cache::new());
     HttpServer::new(move || {
         App::new()
+	    .app_data(cache.clone())
             .service(index)
             .service(list_posts)
             .service(get_post)

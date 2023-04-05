@@ -58,7 +58,27 @@ impl Database {
          Ok(None)
       }
    }
-
+    
+   pub fn get_cache() -> Result<Vec<Post>> {
+       let con = Connection::open("rogger.db")?;
+       let mut posts_db = con.prepare("SELECT id, title, content, html_content, date FROM posts ORDER BY id DESC LIMIT 100")?;
+       let posts_iter = posts_db.query_map([], |row| {
+	   Ok(
+	    Post {
+            id: row.get(0)?,
+	    title: row.get(1)?,
+	    content: row.get(2)?,
+	    html_content: row.get(3)?,
+	    date: row.get(4)?,
+	})
+       })?;
+      let mut posts: Vec<Post> = Vec::new();
+      for posts_fin in posts_iter {
+         posts.push(posts_fin?);
+      }
+      Ok(posts)
+   } 
+    
    pub fn push_post(con: Connection, title: &str, content_md: &str) -> Result<i64> {
        let mut posts_db = con.prepare("INSERT INTO posts (id, title, content, html_content, date) VALUES (NULL, ?, ?, ?, date('now'))")?;
        posts_db.execute([title, content_md, &markdown::to_html(content_md)]);
