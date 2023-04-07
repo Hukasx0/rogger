@@ -113,3 +113,47 @@ footer {
 footer a {
     color: white;
 }
+
+.login-form {
+    width: 400px;
+    margin: 0 auto;
+    border: 1px solid, var(--button-background-color);
+    padding: 20px;
+}
+
+.login-form h2 {
+    font-size: 4em;
+    margin-bottom: 20px;
+}
+
+.login-form label {
+    display: block;
+    margin-bottom: 10px;
+}
+
+.login-form input[type="text"],
+.login-form input[type="password"] {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid var(--button-background-color);
+    margin-bottom: 20px;
+}
+
+.login-form button[type="submit"] {
+    background-color: var(--button-background-color);
+    color: var(--button-text-color);
+    padding: 10px 20px;
+    border: none;
+    cursor: pointer;
+}
+
+.edit-link, .remove-link {
+    display: inline-block;
+    background-color: var(--button-background-color);
+    color: var(--button-text-color);
+    padding: 10px 20px;
+    text-align: center;
+    text-decoration: none;
+    font-size: 16px;
+    margin-right: 10px;
+}
