@@ -105,6 +105,52 @@ async fn cms(req: HttpRequest) -> HttpResponse {
    }
 }
 
+#[get("/cms/post_new")]
+async fn cms_add_post(req: HttpRequest) -> HttpResponse {
+   if let Some(cookie) = req.cookie("session") {
+      if User::validate_key(cookie.value().to_string(), "sessions") {
+	  let post_cms_file = include_str!("../web/cms/post.html");
+	  HttpResponse::Ok().body(post_cms_file.replace("{{operation}}", "upload")
+	                          .replace("{{server-path}}", "/api/addPost")
+	                          .replace("{{post_edit}}", "")
+	                          .replace("{{initial_val}}", ""))
+      } else {
+         HttpResponse::Ok().body("Incorrect session id")
+      }
+   } else {
+     HttpResponse::Ok().body("You need to log in")
+   }
+}
+
+#[get("/cms/post_edit/{pid}")]
+async fn cms_edit_post(req: HttpRequest, pid: actix_web::web::Path<usize>, cache: web::Data<Cache>) -> HttpResponse {
+    if let Some(cookie) = req.cookie("session") {
+       if User::validate_key(cookie.value().to_string(), "sessions") {
+	   let post_cms_file = include_str!("../web/cms/post.html");
+	   let inner_pid = pid.into_inner();
+	    let post: Post;
+	    if inner_pid < 101 {
+		post = cache.get_by_id(inner_pid);
+	    } else {
+		let con = Connection::open("rogger.db").unwrap();
+		if let Ok(Some(this_post)) = Database::get_post(con, inner_pid) {
+		    post = this_post;
+		} else {
+		    return HttpResponse::Ok().body("Post with this id does not exist");
+		}
+	    }
+           HttpResponse::Ok().body(post_cms_file.replace("{{operation}}", "edit")
+	                           .replace("{{server-path}}","/api/editPost")
+	                           .replace("{{post_edit}}", &format!("id={}&", inner_pid))
+	                           .replace("{{initial_val}}", &post.content.replace("`", "\\`")))
+      } else {
+         HttpResponse::Ok().body("Incorrect session id")
+      }
+   } else {
+     HttpResponse::Ok().body("You need to log in")
+   }
+}
+    
 #[derive(Deserialize)]
 struct AddPost {
    api_key: String,
@@ -116,6 +162,11 @@ struct AddPost {
 async fn add_post(form: web::Form<AddPost>, cache: web::Data<Cache>) -> HttpResponse {
    if User::validate_key(form.api_key.to_string(), "keys") {
       let con = Connection::open("rogger.db").unwrap();
+       Database::push_post(con, &form.name, &form.text);
+       cache.db_sync();
+       HttpResponse::Ok().body(format!("Added {} to database",&form.name))
+   } else if User::validate_key(form.api_key.to_string(), "sessions") {
+       let con = Connection::open("rogger.db").unwrap();
        Database::push_post(con, &form.name, &form.text);
        cache.db_sync();
        HttpResponse::Ok().body(format!("Added {} to database",&form.name))
@@ -139,6 +190,11 @@ async fn modify_post(form: web::Form<ModPost>, cache: web::Data<Cache>) -> HttpR
 	Database::edit_post(con, form.id, &form.name, &form.text);
 	cache.db_sync();
         HttpResponse::Ok().body(format!("Modified {} post in database",form.id))
+    } else if User::validate_key(form.api_key.to_string(), "sessions") {
+	let con = Connection::open("rogger.db").unwrap();
+	Database::edit_post(con, form.id, &form.name, &form.text);
+	cache.db_sync();
+        HttpResponse::Ok().body(format!("Modified {} post in database",form.id))
     } else {
        HttpResponse::Ok().body("Api key is not correct")
     }
@@ -154,6 +210,11 @@ struct RmPost {
 async fn remove_post(form: web::Form<RmPost>, cache: web::Data<Cache>) -> HttpResponse {
     if User::validate_key(form.api_key.to_string(), "keys") {
        let con = Connection::open("rogger.db").unwrap();
+	Database::rm_post(con, form.id);
+	cache.db_sync();
+        HttpResponse::Ok().body(format!("Post with id {} has been removed",form.id))
+    } else if User::validate_key(form.api_key.to_string(), "sessions") {	
+	let con = Connection::open("rogger.db").unwrap();
 	Database::rm_post(con, form.id);
 	cache.db_sync();
         HttpResponse::Ok().body(format!("Post with id {} has been removed",form.id))
@@ -184,6 +245,12 @@ async fn css_main() -> HttpResponse {
     HttpResponse::Ok().body(css_file)
 }
 
+#[get("css/cms.css")]
+async fn css_cms() -> HttpResponse {
+    let css_file = include_str!("../web/css/cms.css");
+    HttpResponse::Ok().body(css_file)
+}
+
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     Database::new();
@@ -200,7 +267,10 @@ async fn main() -> std::io::Result<()> {
             .service(remove_post)
 	    .service(generate_key)
             .service(css_main)
+	    .service(css_cms)
 	    .service(cms)
+	    .service(cms_add_post)
+	    .service(cms_edit_post)
 	    .service(cms_login)
 	    .service(cms_login_site)
 })
