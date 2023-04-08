@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Posts | Rogger</title>
+    <link rel="stylesheet" href="../../../css/main.css">
+</head>
+<body>
+  <script>
+    function rmp(pid) {
+	const xhr = new XMLHttpRequest();
+        const url = "/api/removePost";
+        const params = "api_key="+
+              new Map(document.cookie.split("; ").map(cookie => cookie.split('='))).get('session')
+            +"&id="+pid;
+	xhr.open("POST", url, true);
+        xhr.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
+        xhr.onreadystatechange = function() {
+            if (this.readyState == XMLHttpRequest.DONE && this.status == 200) {
+                alert("Sent, and received answer: " + xhr.responseText);
+            }
+        };
+        xhr.send(params);
+    }
+  </script>
+    <main>
+        <div class="posts-container">
+	   <div class="post">
+	   <h2 class="title"><a href="/cms/post_new"><b>Add new post</b></a></h2>
+	</div>
+           {{post_list}}
+        </div>
+    </main>
+    <footer>
+       {{counter}}
+    </footer>
+</body>
+</html>

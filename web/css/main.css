@@ -148,9 +148,9 @@ footer a {
 }
 
 .edit-link, .remove-link {
-    display: inline-block;
     background-color: var(--button-background-color);
     color: var(--button-text-color);
+    cursor: pointer;
     padding: 10px 20px;
     text-align: center;
     text-decoration: none;

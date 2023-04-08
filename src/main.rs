@@ -92,16 +92,47 @@ async fn cms_login(form: web::Form<CmsLogin>) -> HttpResponse {
    }   
 }
 
-#[get("/cms")]
-async fn cms(req: HttpRequest) -> HttpResponse {
+#[get("/cms/posts/{pathid}")]
+async fn cms(pathid: actix_web::web::Path<usize>, cache: web::Data<Cache>, req: HttpRequest) -> HttpResponse {
    if let Some(cookie) = req.cookie("session") {
       if User::validate_key(cookie.value().to_string(), "sessions") {
-         HttpResponse::Ok().body("Correct session id! welcome")
+	  let con = Connection::open("rogger.db").unwrap();
+	  let mut posts_file: String = include_str!("../web/cms/posts.html").to_string();
+	  let mut post_list = String::new();
+	  let inner_path = pathid.into_inner();
+	  let offset = if inner_path > 1 {
+	      posts_file = posts_file.replace("{{counter}}", &format!(r#"<p><a href="/cms/posts/{}">{}</a> <span style="color: rgb(242, 242, 242);">{}</span> <a href="/cms/posts/{}">{}</a></p>"#,
+       			                 	      inner_path-1, inner_path-1, inner_path, inner_path+1, inner_path+1));
+	      inner_path
+	  } else {
+	      posts_file = posts_file.replace("{{counter}}", r#"<p><span style="color: rgb(242, 242, 242);">1</span> <a href="/cms/posts/2">2</a></p>"#);
+	      1
+	  };
+	  let posts: Vec<Post>;
+	  if inner_path < 11 {
+	      posts = cache.get_posts(inner_path);
+	  } else {
+	      if let Ok(posts_vec) = Database::get_list(con , offset-1) { posts = posts_vec; }
+	      else {
+		  return HttpResponse::Ok().body("Cannot find posts with this id");
+	      }
+	  }
+	  for post in posts {
+    	      post_list.push_str(&format!(r#"
+	<div class="post">
+	   <h2 class="title"><a href="/cms/post_edit/{}"><b>{}</b></a></h2>
+	   <p class="description">{}</p>
+	   <span class="date">{}</span>
+           <p class="remove-link" onclick="rmp({})"><b>remove post</b></p>
+	</div>
+	"#,post.id ,post.title, format!("{}...<br><a href=\"/cms/post_edit/{}\"><b>Edit post</b></a>", post.content.chars().take(355).collect::<String>(), post.id), post.date, post.id));
+	  }
+	  HttpResponse::Ok().body(posts_file.replace("{{author_name}}",YOUR_NAME).replace("{{post_list}}",&post_list))
       } else {
-         HttpResponse::Ok().body("Incorrect session id")
+          HttpResponse::Ok().body("Incorrect session id")
       }
    } else {
-     HttpResponse::Ok().body("You need to log in")
+       HttpResponse::Ok().body("You need to log in")
    }
 }
 
