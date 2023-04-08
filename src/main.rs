@@ -70,6 +70,19 @@ async fn get_post(pid: actix_web::web::Path<usize>, cache: web::Data<Cache>) -> 
        HttpResponse::Ok().body(post_file.replace("{{post_name}}",&post.title).replace("{{post_text}}",&post.html_content).replace("{{post_date}}",&post.date).replace("{{author_name}}",YOUR_NAME))
 }
 
+#[get("/cms/")]
+async fn cms(req: HttpRequest) -> HttpResponse {
+    if let Some(cookie) = req.cookie("session") {
+	if User::validate_key(cookie.value().to_string(), "sessions") {
+	    HttpResponse::Found().header("Location","/cms/posts/1").finish()
+	} else {
+	    HttpResponse::Found().header("Location","/cms/login").finish()
+	}
+    } else {
+	HttpResponse::Found().header("Location","/cms/login").finish()
+    }    
+}
+
 #[get("/cms/login")]
 async fn cms_login_site() -> HttpResponse {
    HttpResponse::Ok().body(include_str!("../web/cms/login.html").to_string())
@@ -86,14 +99,14 @@ struct CmsLogin {
 async fn cms_login(form: web::Form<CmsLogin>) -> HttpResponse {
    if User::validate(form.login.to_string(), form.password.to_string()) {
       let session_cookie = Cookie::new("session", User::new_session());
-      HttpResponse::Ok().cookie(session_cookie).body("Successfully logged in")
+       HttpResponse::Found().cookie(session_cookie).header("Location","/cms/posts/1").finish()
    } else {
       HttpResponse::Ok().body("Wrong credentials")
    }   
 }
 
 #[get("/cms/posts/{pathid}")]
-async fn cms(pathid: actix_web::web::Path<usize>, cache: web::Data<Cache>, req: HttpRequest) -> HttpResponse {
+async fn cms_posts(pathid: actix_web::web::Path<usize>, cache: web::Data<Cache>, req: HttpRequest) -> HttpResponse {
    if let Some(cookie) = req.cookie("session") {
       if User::validate_key(cookie.value().to_string(), "sessions") {
 	  let con = Connection::open("rogger.db").unwrap();
@@ -129,10 +142,10 @@ async fn cms(pathid: actix_web::web::Path<usize>, cache: web::Data<Cache>, req: 
 	  }
 	  HttpResponse::Ok().body(posts_file.replace("{{author_name}}",YOUR_NAME).replace("{{post_list}}",&post_list))
       } else {
-          HttpResponse::Ok().body("Incorrect session id")
+          HttpResponse::Found().header("Location","/cms/login").finish()
       }
    } else {
-       HttpResponse::Ok().body("You need to log in")
+      HttpResponse::Found().header("Location","/cms/login").finish()
    }
 }
 
@@ -146,10 +159,10 @@ async fn cms_add_post(req: HttpRequest) -> HttpResponse {
 	                          .replace("{{post_edit}}", "")
 	                          .replace("{{initial_val}}", ""))
       } else {
-         HttpResponse::Ok().body("Incorrect session id")
+	  HttpResponse::Found().header("Location","/cms/login").finish()
       }
    } else {
-     HttpResponse::Ok().body("You need to log in")
+       HttpResponse::Found().header("Location","/cms/login").finish()
    }
 }
 
@@ -175,10 +188,10 @@ async fn cms_edit_post(req: HttpRequest, pid: actix_web::web::Path<usize>, cache
 	                           .replace("{{post_edit}}", &format!("id={}&", inner_pid))
 	                           .replace("{{initial_val}}", &post.content.replace("`", "\\`")))
       } else {
-         HttpResponse::Ok().body("Incorrect session id")
+           HttpResponse::Found().header("Location","/cms/login").finish()
       }
    } else {
-     HttpResponse::Ok().body("You need to log in")
+	HttpResponse::Found().header("Location","/cms/login").finish()
    }
 }
     
@@ -282,6 +295,26 @@ async fn css_cms() -> HttpResponse {
     HttpResponse::Ok().body(css_file)
 }
 
+#[get("/posts")]
+async fn posts_redir() -> HttpResponse {
+    HttpResponse::Found().header("Location","/posts/1").finish()
+}
+
+#[get("/posts/")]
+async fn postst_redir() -> HttpResponse {
+    HttpResponse::Found().header("Location","/posts/1").finish()
+}
+
+#[get("/cms/posts")]
+async fn cms_posts_redir() -> HttpResponse {
+    HttpResponse::Found().header("Location","/cms/posts/1").finish()
+}
+
+#[get("/cms")]
+async fn cms_redir() -> HttpResponse {
+    HttpResponse::Found().header("Location","/cms/").finish()
+}
+
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     Database::new();
@@ -291,6 +324,8 @@ async fn main() -> std::io::Result<()> {
         App::new()
 	    .app_data(cache.clone())
             .service(index)
+	    .service(posts_redir)
+	    .service(postst_redir)
             .service(list_posts)
             .service(get_post)
             .service(add_post)
@@ -299,7 +334,10 @@ async fn main() -> std::io::Result<()> {
 	    .service(generate_key)
             .service(css_main)
 	    .service(css_cms)
+	    .service(cms_redir)
 	    .service(cms)
+	    .service(cms_posts_redir)
+	    .service(cms_posts)
 	    .service(cms_add_post)
 	    .service(cms_edit_post)
 	    .service(cms_login)
