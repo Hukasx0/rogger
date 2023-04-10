@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Posts | {{ author_name }}'s blog</title>
+    <link rel="stylesheet" href="../css/main.css">
+</head>
+<body>
+    <main>
+      <div class="posts-container">
+	{% for post in posts %}
+	<div class="post">
+	  <h2 class="title"><a href="/post/{{ post.id }}"><b>{{ post.title }}</b></a></h2>
+	  <p class="description">{{ post.content }}</p>
+	  <span class="date">{{ post.date }}</span>
+	</div>
+	{% endfor %}
+        </div>
+    </main>
+    <footer>
+      {% if curr_page == 1 %}
+      <p><span style="color: rgb(242, 242, 242);">1</span> <a href="/posts/2">2</a></p>
+      {% else %}
+         <p>
+         {% for (i, ctr) in counter.iter().enumerate() %}
+            {% if i == 1 %}
+               <span style="color: rgb(242, 242, 242);">{{ ctr }}</span>
+            {% else %}
+	       <a href="/posts/{{ ctr }}">{{ ctr }}</a>
+	    {% endif %}
+	 {% endfor %}
+	 </p>     
+     {% endif %}     
+    </footer>
+</body>
+</html>

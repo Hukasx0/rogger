@@ -13,3 +13,5 @@ sha2 = "0.10"
 rand = "0.8.4"
 rusqlite = "0.29.0"
 redis = "0.22.3"
+askama = "0.12.0"
+

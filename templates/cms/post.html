@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{{operation}} post | Rogger</title>
+    <title>{{ operation }} post | Rogger</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/simplemde/latest/simplemde.min.css">
     <link rel="stylesheet" href="../css/cms.css">
     <link rel="stylesheet" href="../../css/cms.css">
@@ -15,7 +15,7 @@
   <script>
     var simplemde = new SimpleMDE({
 	element: document.getElementById("editor"),
-	initialValue: `{{initial_val}}`,
+	initialValue: `{{ initial_val }}`,
 	toolbar: [
 	    "heading", "bold", "italic", "|",
 	    "quote", "unordered-list", "ordered-list", "|",
@@ -25,8 +25,8 @@
 		name: "custom-button",
 		action: function(editor) {
 		    const xhr = new XMLHttpRequest();
-		    const url = "{{server-path}}";
-		    const params = "{{post_edit}}api_key="+
+		    const url = "{{ server_path }}";
+		    const params = "{{ post_edit }}api_key="+
 			  new Map(document.cookie.split("; ").map(cookie => cookie.split('='))).get('session')
 			+"&name=Test_post&text="+simplemde.value();
 		    xhr.open("POST", url, true);
@@ -38,8 +38,8 @@
 		    };
 		    xhr.send(params);
 		},
-		className: "fa fa-{{operation}}", // upload or edit
-		title: "{{operation}}",
+		className: "fa fa-{{ operation }}", // upload or edit
+		title: "{{ operation }}",
 	    }
 	]
     });

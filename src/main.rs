@@ -1,6 +1,7 @@
 use actix_web::{get, post, App, web, HttpResponse, HttpServer, HttpRequest, cookie::Cookie};
 use serde::Deserialize;
 use rusqlite::Connection;
+use askama::Template;
 mod posts;
 use posts::{Database, Post};
 mod users;
@@ -9,26 +10,37 @@ mod cache;
 use cache::Cache;
 
 static YOUR_NAME: &str = "Hubert";
-static YOUR_DESCRIPTION: &str = "test description, which is a placeholder";
+static BLOG_DESCRIPTION: &str = "test description, which is a placeholder";
+
+#[derive(Template)]
+#[template(path = "index.html")]
+struct IndexTemplate<'a> {
+    author_name: &'a str,
+    blog_description: &'a str,
+}
 
 #[get("/")]
 async fn index() -> HttpResponse {
-    let index_file = include_str!("../web/index.html").replace("{{author_name}}",YOUR_NAME).replace("{{author_description}}",YOUR_DESCRIPTION);
-    HttpResponse::Ok().body(index_file)
+    let index_file = IndexTemplate { author_name: YOUR_NAME, blog_description: BLOG_DESCRIPTION };
+    HttpResponse::Ok().body(index_file.render().unwrap())
+}
+
+#[derive(Template)]
+#[template(path = "posts.html")]
+struct PostsTemplate<'a> {
+    author_name: &'a str,
+    posts: &'a [Post],
+    counter: [usize; 3],
+    curr_page: usize,
 }
 
 #[get("/posts/{pathid}")]
 async fn list_posts(pathid: actix_web::web::Path<usize>, cache: web::Data<Cache>) -> HttpResponse {
     let con = Connection::open("rogger.db").unwrap();
-    let mut posts_file: String = include_str!("../web/posts.html").to_string();
-    let mut post_list = String::new();
     let inner_path = pathid.into_inner();
     let offset = if inner_path > 1 {
-       posts_file = posts_file.replace("{{counter}}", &format!(r#"<p><a href="/posts/{}">{}</a> <span style="color: rgb(242, 242, 242);">{}</span> <a href="/posts/{}">{}</a></p>"#,
-       			                 	      inner_path-1, inner_path-1, inner_path, inner_path+1, inner_path+1));
        inner_path
     } else {
-       posts_file = posts_file.replace("{{counter}}", r#"<p><span style="color: rgb(242, 242, 242);">1</span> <a href="/posts/2">2</a></p>"#);
        1
     };
     let posts: Vec<Post>;
@@ -40,22 +52,22 @@ async fn list_posts(pathid: actix_web::web::Path<usize>, cache: web::Data<Cache>
 	     return HttpResponse::Ok().body("Cannot find posts with this id");
 	 }
     }
-    for post in posts {
-    	post_list.push_str(&format!(r#"
-	<div class="post">
-	   <h2 class="title"><a href="/post/{}"><b>{}</b></a></h2>
-	   <p class="description">{}</p>
-	   <span class="date">{}</span>
-	</div>
-	"#,post.id ,post.title, format!("{}...<br><a href=\"/post/{}\"><b>Read more</b></a>", post.content.chars().take(355).collect::<String>(), post.id), post.date));
-    }
-    HttpResponse::Ok().body(posts_file.replace("{{author_name}}",YOUR_NAME).replace("{{post_list}}",&post_list))
+    let posts_file = PostsTemplate { author_name: YOUR_NAME, posts: &posts, counter: [offset-1, offset, offset+1], curr_page: offset };
+    HttpResponse::Ok().body(posts_file.render().unwrap())
+}
+
+#[derive(Template)]
+#[template(path = "post.html")]
+struct PostTemplate<'a> {
+    author_name: &'a str,
+    post_name: &'a str,
+    post_text: &'a str,
+    post_date: &'a str,
 }
 
 #[get("/post/{pid}")]
 async fn get_post(pid: actix_web::web::Path<usize>, cache: web::Data<Cache>) -> HttpResponse {
     let con = Connection::open("rogger.db").unwrap();
-    let post_file = include_str!("../web/post.html");
     let inner_pid = pid.into_inner();
     let post: Post;
     if inner_pid < 101 {
@@ -67,7 +79,8 @@ async fn get_post(pid: actix_web::web::Path<usize>, cache: web::Data<Cache>) -> 
 	    return HttpResponse::Ok().body("Post with this id does not exist");
 	}
     }
-       HttpResponse::Ok().body(post_file.replace("{{post_name}}",&post.title).replace("{{post_text}}",&post.html_content).replace("{{post_date}}",&post.date).replace("{{author_name}}",YOUR_NAME))
+    let post_file = PostTemplate { author_name: YOUR_NAME, post_name: &post.title, post_text: &post.html_content, post_date: &post.date };
+    HttpResponse::Ok().body(post_file.render().unwrap())
 }
 
 #[get("/cms/")]
@@ -85,7 +98,7 @@ async fn cms(req: HttpRequest) -> HttpResponse {
 
 #[get("/cms/login")]
 async fn cms_login_site() -> HttpResponse {
-   HttpResponse::Ok().body(include_str!("../web/cms/login.html").to_string())
+   HttpResponse::Ok().body(include_str!("../web/login.html").to_string())
 }
 
 #[derive(Deserialize)]
@@ -105,20 +118,24 @@ async fn cms_login(form: web::Form<CmsLogin>) -> HttpResponse {
    }   
 }
 
+#[derive(Template)]
+#[template(path = "cms/posts.html")]
+struct CmsPostsTemplate<'a> {
+    author_name: &'a str,
+    posts: &'a [Post],
+    counter: [usize; 3],
+    curr_page: usize,
+}
+
 #[get("/cms/posts/{pathid}")]
 async fn cms_posts(pathid: actix_web::web::Path<usize>, cache: web::Data<Cache>, req: HttpRequest) -> HttpResponse {
    if let Some(cookie) = req.cookie("session") {
       if User::validate_key(cookie.value().to_string(), "sessions") {
 	  let con = Connection::open("rogger.db").unwrap();
-	  let mut posts_file: String = include_str!("../web/cms/posts.html").to_string();
-	  let mut post_list = String::new();
 	  let inner_path = pathid.into_inner();
 	  let offset = if inner_path > 1 {
-	      posts_file = posts_file.replace("{{counter}}", &format!(r#"<p><a href="/cms/posts/{}">{}</a> <span style="color: rgb(242, 242, 242);">{}</span> <a href="/cms/posts/{}">{}</a></p>"#,
-       			                 	      inner_path-1, inner_path-1, inner_path, inner_path+1, inner_path+1));
 	      inner_path
 	  } else {
-	      posts_file = posts_file.replace("{{counter}}", r#"<p><span style="color: rgb(242, 242, 242);">1</span> <a href="/cms/posts/2">2</a></p>"#);
 	      1
 	  };
 	  let posts: Vec<Post>;
@@ -130,17 +147,8 @@ async fn cms_posts(pathid: actix_web::web::Path<usize>, cache: web::Data<Cache>,
 		  return HttpResponse::Ok().body("Cannot find posts with this id");
 	      }
 	  }
-	  for post in posts {
-    	      post_list.push_str(&format!(r#"
-	<div class="post">
-	   <h2 class="title"><a href="/cms/post_edit/{}"><b>{}</b></a></h2>
-	   <p class="description">{}</p>
-	   <span class="date">{}</span>
-           <p class="remove-link" onclick="rmp({})"><b>remove post</b></p>
-	</div>
-	"#,post.id ,post.title, format!("{}...<br><a href=\"/cms/post_edit/{}\"><b>Edit post</b></a>", post.content.chars().take(355).collect::<String>(), post.id), post.date, post.id));
-	  }
-	  HttpResponse::Ok().body(posts_file.replace("{{author_name}}",YOUR_NAME).replace("{{post_list}}",&post_list))
+	  let posts_file = CmsPostsTemplate { author_name: YOUR_NAME, posts: &posts, counter: [offset-1, offset, offset+1], curr_page: offset };
+	  HttpResponse::Ok().body(posts_file.render().unwrap())
       } else {
           HttpResponse::Found().header("Location","/cms/login").finish()
       }
@@ -149,15 +157,21 @@ async fn cms_posts(pathid: actix_web::web::Path<usize>, cache: web::Data<Cache>,
    }
 }
 
+#[derive(Template)]
+#[template(path = "cms/post.html")]
+struct CmsNewPostTemplate<'a> {
+    operation: &'a str,
+    server_path: &'a str,
+    post_edit: &'a str,
+    initial_val: &'a str,
+}
+
 #[get("/cms/post_new")]
 async fn cms_add_post(req: HttpRequest) -> HttpResponse {
    if let Some(cookie) = req.cookie("session") {
       if User::validate_key(cookie.value().to_string(), "sessions") {
-	  let post_cms_file = include_str!("../web/cms/post.html");
-	  HttpResponse::Ok().body(post_cms_file.replace("{{operation}}", "upload")
-	                          .replace("{{server-path}}", "/api/addPost")
-	                          .replace("{{post_edit}}", "")
-	                          .replace("{{initial_val}}", ""))
+	  let post_cms_file = CmsNewPostTemplate { operation: "upload", server_path: "/api/addPost", post_edit: "", initial_val: ""};
+	  HttpResponse::Ok().body(post_cms_file.render().unwrap())
       } else {
 	  HttpResponse::Found().header("Location","/cms/login").finish()
       }
@@ -166,11 +180,19 @@ async fn cms_add_post(req: HttpRequest) -> HttpResponse {
    }
 }
 
+#[derive(Template)]
+#[template(path = "cms/post.html")]
+struct CmsEditPostTemplate<'a> {
+    operation: &'a str,
+    server_path: &'a str,
+    post_edit: &'a str,
+    initial_val: &'a str,
+}
+
 #[get("/cms/post_edit/{pid}")]
 async fn cms_edit_post(req: HttpRequest, pid: actix_web::web::Path<usize>, cache: web::Data<Cache>) -> HttpResponse {
     if let Some(cookie) = req.cookie("session") {
        if User::validate_key(cookie.value().to_string(), "sessions") {
-	   let post_cms_file = include_str!("../web/cms/post.html");
 	   let inner_pid = pid.into_inner();
 	    let post: Post;
 	    if inner_pid < 101 {
@@ -183,10 +205,8 @@ async fn cms_edit_post(req: HttpRequest, pid: actix_web::web::Path<usize>, cache
 		    return HttpResponse::Ok().body("Post with this id does not exist");
 		}
 	    }
-           HttpResponse::Ok().body(post_cms_file.replace("{{operation}}", "edit")
-	                           .replace("{{server-path}}","/api/editPost")
-	                           .replace("{{post_edit}}", &format!("id={}&", inner_pid))
-	                           .replace("{{initial_val}}", &post.content.replace("`", "\\`")))
+	   let post_cms_file = CmsNewPostTemplate { operation: "edit", server_path: "/api/editPost", post_edit: &format!("id={}&", inner_pid), initial_val: &post.content.replace("`", "\\`")};
+           HttpResponse::Ok().body(post_cms_file.render().unwrap())
       } else {
            HttpResponse::Found().header("Location","/cms/login").finish()
       }

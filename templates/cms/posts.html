@@ -30,11 +30,30 @@
 	   <div class="post">
 	   <h2 class="title"><a href="/cms/post_new"><b>Add new post</b></a></h2>
 	</div>
-           {{post_list}}
+         {% for post in posts %}
+	<div class="post">
+	  <h2 class="title"><a href="/cms/post_edit/{{ post.id }}"><b>{{ post.title }}</b></a></h2>
+	  <p class="description">{{ post.content }}</p>
+	  <span class="date">{{ post.date }}</span>
+	  <p class="remove-link" onclick="rmp({{ post.id }})"><b>remove post</b></p>
+	</div>
+	{% endfor %}
         </div>
     </main>
     <footer>
-       {{counter}}
+        {% if curr_page == 1 %}
+      <p><span style="color: rgb(242, 242, 242);">1</span> <a href="/posts/2">2</a></p>
+      {% else %}
+         <p>
+         {% for (i, ctr) in counter.iter().enumerate() %}
+            {% if i == 1 %}
+               <span style="color: rgb(242, 242, 242);">{{ ctr }}</span>
+            {% else %}
+	       <a href="/posts/{{ ctr }}">{{ ctr }}</a>
+	    {% endif %}
+	 {% endfor %}
+	 </p>     
+     {% endif %}     
     </footer>
 </body>
 </html>
