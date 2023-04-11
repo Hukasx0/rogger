@@ -98,7 +98,7 @@ async fn cms(req: HttpRequest) -> HttpResponse {
 
 #[get("/cms/login")]
 async fn cms_login_site() -> HttpResponse {
-   HttpResponse::Ok().body(include_str!("../web/login.html").to_string())
+   HttpResponse::Ok().body(include_str!("../templates/login.html").to_string())
 }
 
 #[derive(Deserialize)]
@@ -307,13 +307,13 @@ async fn generate_key(form: web::Form<Login>) -> HttpResponse {
 
 #[get("/css/main.css")]
 async fn css_main() -> HttpResponse {
-    let css_file = include_str!("../web/css/main.css");
+    let css_file = include_str!("../templates/css/main.css");
     HttpResponse::Ok().body(css_file)
 }
 
 #[get("css/cms.css")]
 async fn css_cms() -> HttpResponse {
-    let css_file = include_str!("../web/css/cms.css");
+    let css_file = include_str!("../templates/css/cms.css");
     HttpResponse::Ok().body(css_file)
 }
 
