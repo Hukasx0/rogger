@@ -13,6 +13,7 @@
 <body>
   <textarea id="editor" name="markdown"></textarea>
   <script>
+    let postTitle = '{{ post_title }}';
     var simplemde = new SimpleMDE({
 	element: document.getElementById("editor"),
 	initialValue: `{{ initial_val }}`,
@@ -22,25 +23,37 @@
 	    "link", "image", "|",
 	    "preview", "side-by-side", "fullscreen", "|",
 	    {
+               name: "title",
+		action: function(editor) {
+		    const new_title = prompt("Post title", postTitle);
+		    if (new_title !== null) {
+			postTitle = new_title;
+		    }
+		},
+		className: "fa fa-book",
+		title: "Post title",
+            },
+	    {
 		name: "custom-button",
 		action: function(editor) {
 		    const xhr = new XMLHttpRequest();
 		    const url = "{{ server_path }}";
-		    const params = "{{ post_edit }}api_key="+
+		    const params = "{{ post_edit|safe }}api_key="+
 			  new Map(document.cookie.split("; ").map(cookie => cookie.split('='))).get('session')
-			+"&name=Test_post&text="+simplemde.value();
+			+"&name="+postTitle+"&text="+simplemde.value();
 		    xhr.open("POST", url, true);
 		    xhr.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
 		    xhr.onreadystatechange = function() {
 			if (this.readyState == XMLHttpRequest.DONE && this.status == 200) {
-			    alert("Sent, and received answer: " + xhr.responseText);
+			    console.log(xhr.responseText);
+			    window.location.replace("/cms/");
 			}
 		    };
 		    xhr.send(params);
 		},
 		className: "fa fa-{{ operation }}", // upload or edit
 		title: "{{ operation }}",
-	    }
+            }
 	]
     });
     simplemde.toggleSideBySide();

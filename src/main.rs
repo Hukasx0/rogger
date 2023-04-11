@@ -161,6 +161,7 @@ async fn cms_posts(pathid: actix_web::web::Path<usize>, cache: web::Data<Cache>,
 #[template(path = "cms/post.html")]
 struct CmsNewPostTemplate<'a> {
     operation: &'a str,
+    post_title: &'a str,
     server_path: &'a str,
     post_edit: &'a str,
     initial_val: &'a str,
@@ -170,7 +171,7 @@ struct CmsNewPostTemplate<'a> {
 async fn cms_add_post(req: HttpRequest) -> HttpResponse {
    if let Some(cookie) = req.cookie("session") {
       if User::validate_key(cookie.value().to_string(), "sessions") {
-	  let post_cms_file = CmsNewPostTemplate { operation: "upload", server_path: "/api/addPost", post_edit: "", initial_val: ""};
+	  let post_cms_file = CmsNewPostTemplate { operation: "upload", post_title: "", server_path: "/api/addPost", post_edit: "", initial_val: ""};
 	  HttpResponse::Ok().body(post_cms_file.render().unwrap())
       } else {
 	  HttpResponse::Found().header("Location","/cms/login").finish()
@@ -184,6 +185,7 @@ async fn cms_add_post(req: HttpRequest) -> HttpResponse {
 #[template(path = "cms/post.html")]
 struct CmsEditPostTemplate<'a> {
     operation: &'a str,
+    post_title: &'a str,
     server_path: &'a str,
     post_edit: &'a str,
     initial_val: &'a str,
@@ -205,7 +207,7 @@ async fn cms_edit_post(req: HttpRequest, pid: actix_web::web::Path<usize>, cache
 		    return HttpResponse::Ok().body("Post with this id does not exist");
 		}
 	    }
-	   let post_cms_file = CmsNewPostTemplate { operation: "edit", server_path: "/api/editPost", post_edit: &format!("id={}&", inner_pid), initial_val: &post.content.replace("`", "\\`")};
+	   let post_cms_file = CmsNewPostTemplate { operation: "edit", post_title: &post.title, server_path: "/api/editPost", post_edit: &format!("id={}&", inner_pid), initial_val: &post.content.replace("`", "\\`")};
            HttpResponse::Ok().body(post_cms_file.render().unwrap())
       } else {
            HttpResponse::Found().header("Location","/cms/login").finish()
