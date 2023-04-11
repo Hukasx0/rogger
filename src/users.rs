@@ -1,12 +1,14 @@
 use sha2::{Sha256, Sha512, Digest};
 use rand::distributions::{Alphanumeric, DistString};
 use redis::{Commands, Client, LposOptions};
+use std::env;
 
 pub struct User {}
 
 impl User {
      pub fn init_master() {
-        let client = Client::open("redis://127.0.0.1").unwrap();
+	let redis_url = env::var("REDIS_URL").unwrap_or_else(|_| String::from("redis://127.0.0.1"));
+    let client = Client::open(redis_url).unwrap();
 	let mut con = client.get_connection().unwrap();
 	let username = "Rogger_Admin";
 	let rng_str: String = Alphanumeric.sample_string(&mut rand::thread_rng(), 32);
@@ -20,7 +22,8 @@ impl User {
      }
 
      pub fn validate(login: String, password: String) -> bool {
-         let client = Client::open("redis://127.0.0.1").unwrap();
+	 let redis_url = env::var("REDIS_URL").unwrap_or_else(|_| String::from("redis://127.0.0.1"));
+     let client = Client::open(redis_url).unwrap();
 	 let mut con = client.get_connection().unwrap();
 	 let get_master: Option<String> = con.hget("users", login.to_string()).unwrap();
 	 match get_master {
@@ -47,14 +50,16 @@ impl User {
 	 let mut hasher = Sha256::new();
 	 hasher.update(rng_str);
 	 let key_hash = hasher.finalize();
-     	 let client = Client::open("redis://127.0.0.1").unwrap();
+	 let redis_url = env::var("REDIS_URL").unwrap_or_else(|_| String::from("redis://127.0.0.1"));
+     	 let client = Client::open(redis_url).unwrap();
 	 let mut con = client.get_connection().unwrap();
 	 let _: () = con.rpush("keys",format!("{:x}", key_hash)).unwrap();
 	 format!("{:x}", key_hash)
      }
 
      pub fn validate_key(api_key: String, typev: &str) -> bool {
-        let client = Client::open("redis://127.0.0.1").unwrap();
+		let redis_url = env::var("REDIS_URL").unwrap_or_else(|_| String::from("redis://127.0.0.1"));
+        let client = Client::open(redis_url).unwrap();
 	let mut con = client.get_connection().unwrap();
 	let options = LposOptions::default();
 	let key_index: Option<i32> = con.lpos(typev, api_key, options).unwrap();
@@ -66,7 +71,8 @@ impl User {
 
      pub fn new_session() -> String {
          let rng_str: String = Alphanumeric.sample_string(&mut rand::thread_rng(), 48);
-     	 let client = Client::open("redis://127.0.0.1").unwrap();
+		 let redis_url = env::var("REDIS_URL").unwrap_or_else(|_| String::from("redis://127.0.0.1"));
+     	 let client = Client::open(redis_url).unwrap();
 	 let mut con = client.get_connection().unwrap();
 	 let _: () = con.rpush("sessions", rng_str.to_string()).unwrap();
 	 let _: () = con.expire(rng_str.to_string(), 600).unwrap();
