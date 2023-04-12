@@ -81,7 +81,10 @@ impl Database {
     
    pub fn push_post(con: Connection, title: &str, content_md: &str) -> Result<i64> {
        let mut posts_db = con.prepare("INSERT INTO posts (id, title, content, html_content, date) VALUES (NULL, ?, ?, ?, date('now'))")?;
-       posts_db.execute([title, content_md, &markdown::to_html(content_md)]);
+       match posts_db.execute([title, content_md, &markdown::to_html(content_md)]) {
+	   Ok(_) => {}
+	   Err(error) => { println!("Cannot add post to SQLite Database because of: {}", error)}
+       } 
        Ok(con.last_insert_rowid())
    }
 

@@ -87,12 +87,12 @@ async fn get_post(pid: actix_web::web::Path<usize>, cache: web::Data<Cache>) -> 
 async fn cms(req: HttpRequest) -> HttpResponse {
     if let Some(cookie) = req.cookie("session") {
 	if User::validate_key(cookie.value().to_string(), "sessions") {
-	    HttpResponse::Found().header("Location","/cms/posts/1").finish()
+	    HttpResponse::Found().append_header(("Location","/cms/posts/1")).finish()
 	} else {
-	    HttpResponse::Found().header("Location","/cms/login").finish()
+	    HttpResponse::Found().append_header(("Location","/cms/login")).finish()
 	}
     } else {
-	HttpResponse::Found().header("Location","/cms/login").finish()
+	HttpResponse::Found().append_header(("Location","/cms/login")).finish()
     }    
 }
 
@@ -112,7 +112,7 @@ struct CmsLogin {
 async fn cms_login(form: web::Form<CmsLogin>) -> HttpResponse {
    if User::validate(form.login.to_string(), form.password.to_string()) {
       let session_cookie = Cookie::new("session", User::new_session());
-       HttpResponse::Found().cookie(session_cookie).header("Location","/cms/posts/1").finish()
+       HttpResponse::Found().cookie(session_cookie).append_header(("Location","/cms/posts/1")).finish()
    } else {
       HttpResponse::Ok().body("Wrong credentials")
    }   
@@ -121,7 +121,6 @@ async fn cms_login(form: web::Form<CmsLogin>) -> HttpResponse {
 #[derive(Template)]
 #[template(path = "cms/posts.html")]
 struct CmsPostsTemplate<'a> {
-    author_name: &'a str,
     posts: &'a [Post],
     counter: [usize; 3],
     curr_page: usize,
@@ -147,13 +146,13 @@ async fn cms_posts(pathid: actix_web::web::Path<usize>, cache: web::Data<Cache>,
 		  return HttpResponse::Ok().body("Cannot find posts with this id");
 	      }
 	  }
-	  let posts_file = CmsPostsTemplate { author_name: YOUR_NAME, posts: &posts, counter: [offset-1, offset, offset+1], curr_page: offset };
+	  let posts_file = CmsPostsTemplate { posts: &posts, counter: [offset-1, offset, offset+1], curr_page: offset };
 	  HttpResponse::Ok().body(posts_file.render().unwrap())
       } else {
-          HttpResponse::Found().header("Location","/cms/login").finish()
+          HttpResponse::Found().append_header(("Location","/cms/login")).finish()
       }
    } else {
-      HttpResponse::Found().header("Location","/cms/login").finish()
+      HttpResponse::Found().append_header(("Location","/cms/login")).finish()
    }
 }
 
@@ -174,10 +173,10 @@ async fn cms_add_post(req: HttpRequest) -> HttpResponse {
 	  let post_cms_file = CmsNewPostTemplate { operation: "upload", post_title: "", server_path: "/api/addPost", post_edit: "", initial_val: ""};
 	  HttpResponse::Ok().body(post_cms_file.render().unwrap())
       } else {
-	  HttpResponse::Found().header("Location","/cms/login").finish()
+	  HttpResponse::Found().append_header(("Location","/cms/login")).finish()
       }
    } else {
-       HttpResponse::Found().header("Location","/cms/login").finish()
+       HttpResponse::Found().append_header(("Location","/cms/login")).finish()
    }
 }
 
@@ -210,10 +209,10 @@ async fn cms_edit_post(req: HttpRequest, pid: actix_web::web::Path<usize>, cache
 	   let post_cms_file = CmsNewPostTemplate { operation: "edit", post_title: &post.title, server_path: "/api/editPost", post_edit: &format!("id={}&", inner_pid), initial_val: &post.content.replace("`", "\\`")};
            HttpResponse::Ok().body(post_cms_file.render().unwrap())
       } else {
-           HttpResponse::Found().header("Location","/cms/login").finish()
+           HttpResponse::Found().append_header(("Location","/cms/login")).finish()
       }
    } else {
-	HttpResponse::Found().header("Location","/cms/login").finish()
+	HttpResponse::Found().append_header(("Location","/cms/login")).finish()
    }
 }
     
@@ -226,16 +225,13 @@ struct AddPost {
 
 #[post("/api/addPost")]
 async fn add_post(form: web::Form<AddPost>, cache: web::Data<Cache>) -> HttpResponse {
-   if User::validate_key(form.api_key.to_string(), "keys") {
+   if User::validate_key(form.api_key.to_string(), "keys") || User::validate_key(form.api_key.to_string(), "sessions"){
       let con = Connection::open("rogger.db").unwrap();
-       Database::push_post(con, &form.name, &form.text);
-       cache.db_sync();
-       HttpResponse::Ok().body(format!("Added {} to database",&form.name))
-   } else if User::validate_key(form.api_key.to_string(), "sessions") {
-       let con = Connection::open("rogger.db").unwrap();
-       Database::push_post(con, &form.name, &form.text);
-       cache.db_sync();
-       HttpResponse::Ok().body(format!("Added {} to database",&form.name))
+       match Database::push_post(con, &form.name, &form.text) {
+	    Ok(_) => { 	cache.db_sync();
+			return HttpResponse::Ok().body(format!("Added {} to database",&form.name)); }
+	    Err(_) => { return  HttpResponse::Ok().body("Cannot add post because of Database error"); }
+	}
    } else {
       HttpResponse::Ok().body("Api key is not correct")
    }
@@ -251,16 +247,13 @@ struct ModPost {
 
 #[post("/api/editPost")]
 async fn modify_post(form: web::Form<ModPost>, cache: web::Data<Cache>) -> HttpResponse {
-    if User::validate_key(form.api_key.to_string(), "keys") {
-       let con = Connection::open("rogger.db").unwrap();
-	Database::edit_post(con, form.id, &form.name, &form.text);
-	cache.db_sync();
-        HttpResponse::Ok().body(format!("Modified {} post in database",form.id))
-    } else if User::validate_key(form.api_key.to_string(), "sessions") {
+    if User::validate_key(form.api_key.to_string(), "keys") || User::validate_key(form.api_key.to_string(), "sessions"){
 	let con = Connection::open("rogger.db").unwrap();
-	Database::edit_post(con, form.id, &form.name, &form.text);
-	cache.db_sync();
-        HttpResponse::Ok().body(format!("Modified {} post in database",form.id))
+	match Database::edit_post(con, form.id, &form.name, &form.text) {
+	    Ok(_) => { 	cache.db_sync();
+			return HttpResponse::Ok().body(format!("Modified {} post in database",form.id)); }
+	    Err(_) => { return  HttpResponse::Ok().body("Cannot add post because of Database error"); }
+	}
     } else {
        HttpResponse::Ok().body("Api key is not correct")
     }
@@ -274,16 +267,13 @@ struct RmPost {
 
 #[post("/api/removePost")]
 async fn remove_post(form: web::Form<RmPost>, cache: web::Data<Cache>) -> HttpResponse {
-    if User::validate_key(form.api_key.to_string(), "keys") {
+    if User::validate_key(form.api_key.to_string(), "keys") || User::validate_key(form.api_key.to_string(), "sessions")  {
        let con = Connection::open("rogger.db").unwrap();
-	Database::rm_post(con, form.id);
-	cache.db_sync();
-        HttpResponse::Ok().body(format!("Post with id {} has been removed",form.id))
-    } else if User::validate_key(form.api_key.to_string(), "sessions") {	
-	let con = Connection::open("rogger.db").unwrap();
-	Database::rm_post(con, form.id);
-	cache.db_sync();
-        HttpResponse::Ok().body(format!("Post with id {} has been removed",form.id))
+	match Database::rm_post(con, form.id) {
+	    Ok(_) => { 	cache.db_sync();
+			return HttpResponse::Ok().body(format!("Post with id {} has been removed",form.id)); }
+	    Err(_) => {  return HttpResponse::Ok().body("Cannot remove post because of Database error"); }
+	}
     } else {
        HttpResponse::Ok().body("Api key is not correct")
     }
@@ -317,37 +307,20 @@ async fn css_cms() -> HttpResponse {
     HttpResponse::Ok().body(css_file)
 }
 
-#[get("/posts")]
-async fn posts_redir() -> HttpResponse {
-    HttpResponse::Found().header("Location","/posts/1").finish()
-}
-
-#[get("/posts/")]
-async fn postst_redir() -> HttpResponse {
-    HttpResponse::Found().header("Location","/posts/1").finish()
-}
-
-#[get("/cms/posts")]
-async fn cms_posts_redir() -> HttpResponse {
-    HttpResponse::Found().header("Location","/cms/posts/1").finish()
-}
-
-#[get("/cms")]
-async fn cms_redir() -> HttpResponse {
-    HttpResponse::Found().header("Location","/cms/").finish()
-}
-
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
-    Database::new();
+    match Database::new() {
+	Ok(_) => { println!("Connected to SQLite Successfully!");}
+	Err(error) => { println!("Cannot connect to SQLite database because of: {}", error);}
+    }
     User::init_master();
     let cache = web::Data::new(Cache::new());
     HttpServer::new(move || {
         App::new()
 	    .app_data(cache.clone())
             .service(index)
-	    .service(posts_redir)
-	    .service(postst_redir)
+	    .service(web::redirect("/posts", "/posts/1"))
+	    .service(web::redirect("/posts/", "/posts/1"))
             .service(list_posts)
             .service(get_post)
             .service(add_post)
@@ -356,9 +329,9 @@ async fn main() -> std::io::Result<()> {
 	    .service(generate_key)
             .service(css_main)
 	    .service(css_cms)
-	    .service(cms_redir)
+	    .service(web::redirect("/cms", "/cms/"))
 	    .service(cms)
-	    .service(cms_posts_redir)
+	    .service(web::redirect("/cms/posts", "/cms/posts/1"))
 	    .service(cms_posts)
 	    .service(cms_add_post)
 	    .service(cms_edit_post)

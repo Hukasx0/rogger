@@ -8,8 +8,13 @@ pub struct User {}
 impl User {
      pub fn init_master() {
 	let redis_url = env::var("REDIS_URL").unwrap_or_else(|_| String::from("redis://127.0.0.1"));
-    let client = Client::open(redis_url).unwrap();
-	let mut con = client.get_connection().unwrap();
+	let client = Client::open(redis_url).unwrap();
+	let mut con;
+	match client.get_connection() {
+	    Ok(value) => { println!("Redis connected successfully!"); con = value; }
+	    Err(error) => { println!("Cannot connect to Redis because of: {}", error);
+	                    std::process::exit(1); }
+	}
 	let username = "Rogger_Admin";
 	let rng_str: String = Alphanumeric.sample_string(&mut rand::thread_rng(), 32);
 	println!("Master user credentials:\nusername: {}\npassword: {}\nDO NOT SHARE IT WITH ANYONE!",username,rng_str);
