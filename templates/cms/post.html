@@ -36,6 +36,9 @@
 	    {
 		name: "custom-button",
 		action: function(editor) {
+		    if (postTitle === '') {
+			postTitle = prompt("Post title", postTitle);
+		    }
 		    const xhr = new XMLHttpRequest();
 		    const url = "{{ server_path }}";
 		    const params = "{{ post_edit|safe }}api_key="+
