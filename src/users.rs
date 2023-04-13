@@ -44,7 +44,6 @@ impl User {
 	       }
 	    },
 	    None => {
-	       println!("{} user does not exist", login);
 	       false
 	    }
 	 }

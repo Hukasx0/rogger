@@ -70,13 +70,13 @@ async fn get_post(pid: actix_web::web::Path<usize>, cache: web::Data<Cache>) -> 
     let con = Connection::open("rogger.db").unwrap();
     let inner_pid = pid.into_inner();
     let post: Post;
-    if inner_pid < 101 {
+    if inner_pid < 101 && inner_pid < cache.posts.read().unwrap().len() {
 	post = cache.get_by_id(inner_pid);
     } else {
 	if let Ok(Some(this_post)) = Database::get_post(con, inner_pid) {
             post = this_post;
 	} else {
-	    return HttpResponse::Ok().body("Post with this id does not exist");
+	    return HttpResponse::NotFound().body("Post with this id does not exist");
 	}
     }
     let post_file = PostTemplate { author_name: YOUR_NAME, post_name: &post.title, post_text: &post.html_content, post_date: &post.date };
@@ -114,7 +114,7 @@ async fn cms_login(form: web::Form<CmsLogin>) -> HttpResponse {
       let session_cookie = Cookie::new("session", User::new_session());
        HttpResponse::Found().cookie(session_cookie).append_header(("Location","/cms/posts/1")).finish()
    } else {
-      HttpResponse::Ok().body("Wrong credentials")
+      HttpResponse::Unauthorized().body("Wrong credentials")
    }   
 }
 

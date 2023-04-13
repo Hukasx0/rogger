@@ -2,7 +2,7 @@ use crate::posts::{Database, Post};
 use std::sync::RwLock;
 
 pub struct Cache {
-   posts: RwLock<Vec<Post>>,
+   pub posts: RwLock<Vec<Post>>,
 }
 
 impl Cache {
