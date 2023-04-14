@@ -1,4 +1,4 @@
-use actix_web::{get, post, App, web, HttpResponse, HttpServer, HttpRequest, cookie::Cookie};
+use actix_web::{get, post, App, web, HttpResponse, HttpServer, HttpRequest, cookie::CookieBuilder, cookie::time::Duration};
 use serde::Deserialize;
 use rusqlite::Connection;
 use askama::Template;
@@ -107,15 +107,32 @@ struct CmsLogin {
    password: String,
 }
 
-
 #[post("/cms/login")]
 async fn cms_login(form: web::Form<CmsLogin>) -> HttpResponse {
    if User::validate(form.login.to_string(), form.password.to_string()) {
-      let session_cookie = Cookie::new("session", User::new_session());
+       let session_cookie = CookieBuilder::new("session", User::new_session()).path("/").max_age(Duration::minutes(10)).finish();
        HttpResponse::Found().cookie(session_cookie).append_header(("Location","/cms/posts/1")).finish()
    } else {
       HttpResponse::Unauthorized().body("Wrong credentials")
    }   
+}
+
+#[get("/api/endSession")]
+async fn end_session(req: HttpRequest) -> HttpResponse {
+    if let Some(sessionc) = req.cookie("session") {
+	let session = sessionc.value();
+	if User::validate_key(session.to_string(), "sessions") {
+	    match User::end_session(session.to_string()) {
+		Ok(_) => { let session_cookie = CookieBuilder::new("session", "").path("/").max_age(Duration::seconds(0)).finish();
+			   return HttpResponse::Found().cookie(session_cookie).append_header(("Location","/")).finish(); }
+		Err(_) => { return HttpResponse::InternalServerError().body("Internal server error"); }
+	    }
+	} else {
+	    HttpResponse::Unauthorized().body("Icorrect session id")
+	}
+    } else {
+	HttpResponse::Found().append_header(("Location","/cms/login")).finish()
+    }
 }
 
 #[derive(Template)]
@@ -203,7 +220,7 @@ async fn cms_edit_post(req: HttpRequest, pid: actix_web::web::Path<usize>, cache
 		if let Ok(Some(this_post)) = Database::get_post(con, inner_pid) {
 		    post = this_post;
 		} else {
-		    return HttpResponse::Ok().body("Post with this id does not exist");
+		    return HttpResponse::NotFound().body("Post with this id does not exist");
 		}
 	    }
 	   let post_cms_file = CmsNewPostTemplate { operation: "edit", post_title: &post.title, server_path: "/api/editPost", post_edit: &format!("id={}&", inner_pid), initial_val: &post.content.replace("`", "\\`")};
@@ -230,10 +247,10 @@ async fn add_post(form: web::Form<AddPost>, cache: web::Data<Cache>) -> HttpResp
        match Database::push_post(con, &form.name, &form.text) {
 	    Ok(_) => { 	cache.db_sync();
 			return HttpResponse::Ok().body(format!("Added {} to database",&form.name)); }
-	    Err(_) => { return  HttpResponse::Ok().body("Cannot add post because of Database error"); }
+	    Err(_) => { return  HttpResponse::InternalServerError().body("Cannot add post because of Database error"); }
 	}
    } else {
-      HttpResponse::Ok().body("Api key is not correct")
+      HttpResponse::Unauthorized().body("Api key is not correct")
    }
 }
 
@@ -252,10 +269,10 @@ async fn modify_post(form: web::Form<ModPost>, cache: web::Data<Cache>) -> HttpR
 	match Database::edit_post(con, form.id, &form.name, &form.text) {
 	    Ok(_) => { 	cache.db_sync();
 			return HttpResponse::Ok().body(format!("Modified {} post in database",form.id)); }
-	    Err(_) => { return  HttpResponse::Ok().body("Cannot add post because of Database error"); }
+	    Err(_) => { return  HttpResponse::InternalServerError().body("Cannot edit post because of Database error"); }
 	}
     } else {
-       HttpResponse::Ok().body("Api key is not correct")
+       HttpResponse::Unauthorized().body("Api key is not correct")
     }
 }
 
@@ -272,10 +289,10 @@ async fn remove_post(form: web::Form<RmPost>, cache: web::Data<Cache>) -> HttpRe
 	match Database::rm_post(con, form.id) {
 	    Ok(_) => { 	cache.db_sync();
 			return HttpResponse::Ok().body(format!("Post with id {} has been removed",form.id)); }
-	    Err(_) => {  return HttpResponse::Ok().body("Cannot remove post because of Database error"); }
+	    Err(_) => {  return HttpResponse::InternalServerError().body("Cannot remove post because of Database error"); }
 	}
     } else {
-       HttpResponse::Ok().body("Api key is not correct")
+       HttpResponse::Unauthorized().body("Api key is not correct")
     }
 }
 
@@ -291,7 +308,7 @@ async fn generate_key(form: web::Form<Login>) -> HttpResponse {
       HttpResponse::Ok().body(User::new_key())
    }
    else {
-      HttpResponse::Ok().body("Your login credentials are not correct")
+      HttpResponse::Unauthorized().body("Your login credentials are not correct")
    }
 }
 
@@ -337,6 +354,7 @@ async fn main() -> std::io::Result<()> {
 	    .service(cms_edit_post)
 	    .service(cms_login)
 	    .service(cms_login_site)
+	    .service(end_session)
 })
     .bind(("0.0.0.0", 1337))?
     .run()
