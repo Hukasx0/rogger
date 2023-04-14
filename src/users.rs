@@ -2,6 +2,7 @@ use sha2::{Sha256, Sha512, Digest};
 use rand::distributions::{Alphanumeric, DistString};
 use redis::{Commands, Client, LposOptions, RedisResult};
 use std::env;
+use crate::rogger_cfg::MASTER_USER_LOGIN;
 
 pub struct User {}
 
@@ -15,7 +16,7 @@ impl User {
 	    Err(error) => { println!("Cannot connect to Redis because of: {}", error);
 	                    std::process::exit(1); }
 	}
-	let username = "Rogger_Admin";
+	let username = MASTER_USER_LOGIN;
 	let rng_str: String = Alphanumeric.sample_string(&mut rand::thread_rng(), 32);
 	println!("Master user credentials:\nusername: {}\npassword: {}\nDO NOT SHARE IT WITH ANYONE!",username,rng_str);
         let mut hasher = Sha512::new();

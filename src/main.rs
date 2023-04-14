@@ -8,27 +8,26 @@ mod users;
 use users::User;
 mod cache;
 use cache::Cache;
-
-static YOUR_NAME: &str = "Hubert";
-static BLOG_DESCRIPTION: &str = "test description, which is a placeholder";
+mod rogger_cfg;
+use rogger_cfg::{BLOG_NAME, BLOG_DESCRIPTION};
 
 #[derive(Template)]
 #[template(path = "index.html")]
 struct IndexTemplate<'a> {
-    author_name: &'a str,
+    blog_name: &'a str,
     blog_description: &'a str,
 }
 
 #[get("/")]
 async fn index() -> HttpResponse {
-    let index_file = IndexTemplate { author_name: YOUR_NAME, blog_description: BLOG_DESCRIPTION };
+    let index_file = IndexTemplate { blog_name: BLOG_NAME, blog_description: BLOG_DESCRIPTION };
     HttpResponse::Ok().body(index_file.render().unwrap())
 }
 
 #[derive(Template)]
 #[template(path = "posts.html")]
 struct PostsTemplate<'a> {
-    author_name: &'a str,
+    blog_name: &'a str,
     posts: &'a [Post],
     counter: [usize; 3],
     curr_page: usize,
@@ -52,14 +51,14 @@ async fn list_posts(pathid: actix_web::web::Path<usize>, cache: web::Data<Cache>
 	     return HttpResponse::Ok().body("Cannot find posts with this id");
 	 }
     }
-    let posts_file = PostsTemplate { author_name: YOUR_NAME, posts: &posts, counter: [offset-1, offset, offset+1], curr_page: offset };
+    let posts_file = PostsTemplate { blog_name: BLOG_NAME, posts: &posts, counter: [offset-1, offset, offset+1], curr_page: offset };
     HttpResponse::Ok().body(posts_file.render().unwrap())
 }
 
 #[derive(Template)]
 #[template(path = "post.html")]
 struct PostTemplate<'a> {
-    author_name: &'a str,
+    blog_name: &'a str,
     post_name: &'a str,
     post_text: &'a str,
     post_date: &'a str,
@@ -79,7 +78,7 @@ async fn get_post(pid: actix_web::web::Path<usize>, cache: web::Data<Cache>) -> 
 	    return HttpResponse::NotFound().body("Post with this id does not exist");
 	}
     }
-    let post_file = PostTemplate { author_name: YOUR_NAME, post_name: &post.title, post_text: &post.html_content, post_date: &post.date };
+    let post_file = PostTemplate { blog_name: BLOG_NAME, post_name: &post.title, post_text: &post.html_content, post_date: &post.date };
     HttpResponse::Ok().body(post_file.render().unwrap())
 }
 
