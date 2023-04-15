@@ -41,6 +41,7 @@
 	  <h2 class="title"><a href="/cms/post_edit/{{ post.id }}"><b>{{ post.title }}</b></a></h2>
 	  <p class="description">{{ post.content }}</p>
 	  <span class="date">{{ post.date }}</span>
+	  <p>Author: <a href="/cms/aboutme"><b>{{ your_name }}</b></a></p>
 	  <p class="remove-link" onclick="rmp({{ post.id }})"><b>remove post</b></p>
 	</div>
 	{% endfor %}

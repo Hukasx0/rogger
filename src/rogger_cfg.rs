@@ -6,4 +6,7 @@ pub static BLOG_DESCRIPTION: &str = "Example blog description";   // blog descri
 
 pub static MASTER_USER_LOGIN: &str = "Rogger_Admin";              // login used to login to master user account, password is randomly generated
                                                                   // while software is launched
+
+pub static YOUR_NAME: &str = "Blogger";                           // your name, which will be listed under blog posts 
+
 //

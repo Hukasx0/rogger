@@ -9,7 +9,9 @@ use users::User;
 mod cache;
 use cache::Cache;
 mod rogger_cfg;
-use rogger_cfg::{BLOG_NAME, BLOG_DESCRIPTION};
+use rogger_cfg::{BLOG_NAME, BLOG_DESCRIPTION, YOUR_NAME};
+mod dynamic_site;
+use dynamic_site::Pages;
 
 #[derive(Template)]
 #[template(path = "index.html")]
@@ -25,9 +27,23 @@ async fn index() -> HttpResponse {
 }
 
 #[derive(Template)]
+#[template(path = "aboutme.html")]
+struct AboutMeTemplate<'a> {
+    blog_name: &'a str,
+    aboutme_data: &'a str,
+}
+
+#[get("/aboutme")]
+async fn aboutme(pages: web::Data<Pages>) -> HttpResponse {
+    let aboutme_site = AboutMeTemplate { blog_name: BLOG_NAME, aboutme_data: &pages.get_site(1).html_content, };
+    HttpResponse::Ok().body(aboutme_site.render().unwrap())
+}
+
+#[derive(Template)]
 #[template(path = "posts.html")]
 struct PostsTemplate<'a> {
     blog_name: &'a str,
+    your_name: &'a str,
     posts: &'a [Post],
     counter: [usize; 3],
     curr_page: usize,
@@ -51,7 +67,7 @@ async fn list_posts(pathid: actix_web::web::Path<usize>, cache: web::Data<Cache>
 	     return HttpResponse::Ok().body("Cannot find posts with this id");
 	 }
     }
-    let posts_file = PostsTemplate { blog_name: BLOG_NAME, posts: &posts, counter: [offset-1, offset, offset+1], curr_page: offset };
+    let posts_file = PostsTemplate { blog_name: BLOG_NAME, your_name: YOUR_NAME, posts: &posts, counter: [offset-1, offset, offset+1], curr_page: offset };
     HttpResponse::Ok().body(posts_file.render().unwrap())
 }
 
@@ -137,6 +153,7 @@ async fn end_session(req: HttpRequest) -> HttpResponse {
 #[derive(Template)]
 #[template(path = "cms/posts.html")]
 struct CmsPostsTemplate<'a> {
+    your_name: &'a str,
     posts: &'a [Post],
     counter: [usize; 3],
     curr_page: usize,
@@ -162,7 +179,7 @@ async fn cms_posts(pathid: actix_web::web::Path<usize>, cache: web::Data<Cache>,
 		  return HttpResponse::Ok().body("Cannot find posts with this id");
 	      }
 	  }
-	  let posts_file = CmsPostsTemplate { posts: &posts, counter: [offset-1, offset, offset+1], curr_page: offset };
+	  let posts_file = CmsPostsTemplate { your_name: YOUR_NAME, posts: &posts, counter: [offset-1, offset, offset+1], curr_page: offset };
 	  HttpResponse::Ok().body(posts_file.render().unwrap())
       } else {
           HttpResponse::Found().append_header(("Location","/cms/login")).finish()
@@ -194,6 +211,30 @@ async fn cms_add_post(req: HttpRequest) -> HttpResponse {
    } else {
        HttpResponse::Found().append_header(("Location","/cms/login")).finish()
    }
+}
+
+#[derive(Template)]
+#[template(path = "cms/post.html")]
+struct CmsAboutMe<'a> {
+    operation: &'a str,
+    post_title: &'a str,
+    server_path: &'a str,
+    post_edit: &'a str,
+    initial_val: &'a str,
+}
+
+#[get("/cms/aboutme")]
+async fn cms_aboutme(req: HttpRequest, pages: web::Data<Pages>) -> HttpResponse {
+    if let Some(cookie) = req.cookie("session") {
+	if User::validate_key(cookie.value().to_string(), "sessions") {
+	    let post_cms_file = CmsAboutMe { operation: "edit", post_title: "About me", server_path: "/api/aboutmeEdit", post_edit: "", initial_val: &pages.get_site(1).content, };
+	    HttpResponse::Ok().body(post_cms_file.render().unwrap())
+	} else {
+	    HttpResponse::Found().append_header(("Location","/cms/login")).finish()
+	}
+    } else {
+	HttpResponse::Found().append_header(("Location","/cms/login")).finish()
+    }
 }
 
 #[derive(Template)]
@@ -311,6 +352,22 @@ async fn generate_key(form: web::Form<Login>) -> HttpResponse {
    }
 }
 
+#[derive(Deserialize)]
+struct AboutMeForm {
+    api_key: String,
+    text: String,
+} 
+
+#[post("/api/aboutmeEdit")]
+async fn aboutme_edit(form: web::Form<AboutMeForm>, pages: web::Data<Pages>) -> HttpResponse {
+    if User::validate_key(form.api_key.to_string(), "keys") || User::validate_key(form.api_key.to_string(), "sessions")  {
+	pages.modify_site(1, form.text.to_string());
+	HttpResponse::Ok().body("Aboutme website has been modified")
+    } else {
+	HttpResponse::Unauthorized().body("Api key is not correct")
+    }
+}
+
 #[get("/css/main.css")]
 async fn css_main() -> HttpResponse {
     let css_file = include_str!("../templates/css/main.css");
@@ -331,9 +388,11 @@ async fn main() -> std::io::Result<()> {
     }
     User::init_master();
     let cache = web::Data::new(Cache::new());
+    let pages = web::Data::new(Pages::new());
     HttpServer::new(move || {
         App::new()
 	    .app_data(cache.clone())
+	    .app_data(pages.clone())
             .service(index)
 	    .service(web::redirect("/posts", "/posts/1"))
 	    .service(web::redirect("/posts/", "/posts/1"))
@@ -350,10 +409,13 @@ async fn main() -> std::io::Result<()> {
 	    .service(web::redirect("/cms/posts", "/cms/posts/1"))
 	    .service(cms_posts)
 	    .service(cms_add_post)
+	    .service(cms_aboutme)
 	    .service(cms_edit_post)
 	    .service(cms_login)
 	    .service(cms_login_site)
 	    .service(end_session)
+	    .service(aboutme)
+	    .service(aboutme_edit)
 })
     .bind(("0.0.0.0", 1337))?
     .run()
