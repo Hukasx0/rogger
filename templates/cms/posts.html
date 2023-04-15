@@ -5,7 +5,7 @@
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Posts | Rogger</title>
-    <link rel="stylesheet" href="../../../css/main.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@1/css/pico.min.css">
 </head>
 <body>
   <script>
@@ -30,24 +30,31 @@
 	});
     }
   </script>
+  <nav aria-label="breadcrumb">
+    <ul>
+      <li><a href="/cms">Cms</a></li>
+      <li>Posts</li>
+    </ul>
+  </nav>
   <main>
-    <p>You are logged as <b>Rogger_Admin</b> <a href="/api/endSession">Logout</a></p>
-        <div class="posts-container">
-	   <div class="post">
+    <p align="center">You are logged as <b>Rogger_Admin</b> <a href="/api/endSession">Logout</a></p>
+        <div class="container">
+	   <article>
 	   <h2 class="title"><a href="/cms/post_new"><b>Add new post</b></a></h2>
-	</div>
+	</article>
          {% for post in posts %}
-	<div class="post">
+	<article>
 	  <h2 class="title"><a href="/cms/post_edit/{{ post.id }}"><b>{{ post.title }}</b></a></h2>
 	  <p class="description">{{ post.content }}</p>
 	  <span class="date">{{ post.date }}</span>
 	  <p>Author: <a href="/cms/aboutme"><b>{{ your_name }}</b></a></p>
 	  <p class="remove-link" onclick="rmp({{ post.id }})"><b>remove post</b></p>
-	</div>
+	</article>
 	{% endfor %}
         </div>
     </main>
-    <footer>
+  <footer>
+    <div class="container" align="center">
         {% if curr_page == 1 %}
       <p><span style="color: rgb(242, 242, 242);">1</span> <a href="/posts/2">2</a></p>
       {% else %}
@@ -60,7 +67,8 @@
 	    {% endif %}
 	 {% endfor %}
 	 </p>     
-     {% endif %}     
+	 {% endif %}
+	 </div>
     </footer>
 </body>
 </html>

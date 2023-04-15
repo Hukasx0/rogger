@@ -4,19 +4,22 @@
     <meta charset="UTF-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="stylesheet" href="../css/main.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@1/css/pico.min.css">
     <title>Login | Rogger</title>
 </head>
 <body>
-  <div class="login-form">
-    <h2>Rogger login</h2>
+  <main class="container">
+    <h1 align="center">Rogger login</h1>
     <form method="post" action="/cms/login">
-      <label for "login">Login</label>
-      <input type="text" id="login" name="login">
-      <label for "password">password</label>
-      <input type="password" id="password" name="password">
+      <label for "login">Login
+	<input type="text" id="login" name="login">
+      </label>
+      <label for "password">password
+	<input type="password" id="password" name="password">
+      </label>
       <button type="submit">login</button>
     </form>
+  </main>
 </body>
 </html>
 

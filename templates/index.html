@@ -1,18 +1,24 @@
 <!DOCTYPE html>
+<html data-theme="dark">
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Main | {{ blog_name }}</title>
-    <link rel="stylesheet" href="css/main.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@1/css/pico.min.css">
 </head>
 <body>
+  <nav aria-label="breadcrumb">
+    <ul>
+      <li>Home</li>
+    </ul>
+  </nav>
     <main>
-        <div class="container">
-            <h1 class="author">{{ blog_name }}</h1>
+        <div class="container" align="center">
+            <h1 class="author"><b>{{ blog_name }}</b></h1>
             <p class="description">{{ blog_description }}</p>
-            <a href="/posts/1"><button class="checkPosts">Browse posts</button></a>
+            <a href="/posts/1"><button class="outline">Browse posts</button></a>
         </div>
     </main>
 </body>
