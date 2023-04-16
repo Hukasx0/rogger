@@ -9,7 +9,7 @@ use users::User;
 mod cache;
 use cache::Cache;
 mod rogger_cfg;
-use rogger_cfg::{BLOG_NAME, BLOG_DESCRIPTION, YOUR_NAME};
+use rogger_cfg::{BLOG_NAME, YOUR_NAME};
 mod dynamic_site;
 use dynamic_site::Pages;
 
@@ -17,12 +17,12 @@ use dynamic_site::Pages;
 #[template(path = "index.html")]
 struct IndexTemplate<'a> {
     blog_name: &'a str,
-    blog_description: &'a str,
+    index_data: &'a str,
 }
 
 #[get("/")]
-async fn index() -> HttpResponse {
-    let index_file = IndexTemplate { blog_name: BLOG_NAME, blog_description: BLOG_DESCRIPTION };
+async fn index(pages: web::Data<Pages>) -> HttpResponse {
+    let index_file = IndexTemplate { blog_name: BLOG_NAME, index_data: &pages.get_site(0).html_content, };
     HttpResponse::Ok().body(index_file.render().unwrap())
 }
 
@@ -223,6 +223,21 @@ struct CmsAboutMe<'a> {
     initial_val: &'a str,
 }
 
+#[get("/cms/index")]
+async fn cms_index(req: HttpRequest, pages: web::Data<Pages>) -> HttpResponse {
+    if let Some(cookie) = req.cookie("session") {
+	if User::validate_key(cookie.value().to_string(), "sessions") {
+	    let post_cms_file = CmsAboutMe { operation: "edit", post_title: "Index", server_path: "/api/indexEdit", post_edit: "", initial_val: &pages.get_site(0).content, };
+	    HttpResponse::Ok().body(post_cms_file.render().unwrap())
+	} else {
+	    HttpResponse::Found().append_header(("Location","/cms/login")).finish()
+	}
+    } else {
+	HttpResponse::Found().append_header(("Location","/cms/login")).finish()
+    }
+}
+
+
 #[get("/cms/aboutme")]
 async fn cms_aboutme(req: HttpRequest, pages: web::Data<Pages>) -> HttpResponse {
     if let Some(cookie) = req.cookie("session") {
@@ -236,6 +251,7 @@ async fn cms_aboutme(req: HttpRequest, pages: web::Data<Pages>) -> HttpResponse 
 	HttpResponse::Found().append_header(("Location","/cms/login")).finish()
     }
 }
+
 
 #[derive(Template)]
 #[template(path = "cms/post.html")]
@@ -368,6 +384,16 @@ async fn aboutme_edit(form: web::Form<AboutMeForm>, pages: web::Data<Pages>) -> 
     }
 }
 
+#[post("/api/indexEdit")]
+async fn index_edit(form: web::Form<AboutMeForm>, pages: web::Data<Pages>) -> HttpResponse {
+    if User::validate_key(form.api_key.to_string(), "keys") || User::validate_key(form.api_key.to_string(), "sessions")  {
+	pages.modify_site(0, form.text.to_string());
+	HttpResponse::Ok().body("Index website has been modified")
+    } else {
+	HttpResponse::Unauthorized().body("Api key is not correct")
+    }
+}
+
 #[get("/css/main.css")]
 async fn css_main() -> HttpResponse {
     let css_file = include_str!("../templates/css/main.css");
@@ -394,6 +420,7 @@ async fn main() -> std::io::Result<()> {
 	    .app_data(cache.clone())
 	    .app_data(pages.clone())
             .service(index)
+	    .service(index_edit)
 	    .service(web::redirect("/posts", "/posts/1"))
 	    .service(web::redirect("/posts/", "/posts/1"))
             .service(list_posts)
@@ -410,6 +437,7 @@ async fn main() -> std::io::Result<()> {
 	    .service(cms_posts)
 	    .service(cms_add_post)
 	    .service(cms_aboutme)
+	    .service(cms_index)
 	    .service(cms_edit_post)
 	    .service(cms_login)
 	    .service(cms_login_site)

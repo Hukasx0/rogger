@@ -18,7 +18,7 @@ pub struct Pages {
 
 impl Pages {
     pub fn new() -> Self {
-	Pages { pages: RwLock::new(vec![Page::new(""), Page::new("# About me")]) }
+	Pages { pages: RwLock::new(vec![Page::new("# **My blog**\nThis is example description "), Page::new("# About me")]) }
     }
 
     pub fn get_site(&self, id: usize) -> Page {
