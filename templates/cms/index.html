@@ -27,6 +27,34 @@
     <main>
       <p align="center">You are logged as <b>Rogger_Admin</b> <a href="/api/endSession">Logout</a></p>
       <div class="container">
+	<script>
+	  function req(path, data) {
+	      const xhr = new XMLHttpRequest();
+	      const url = path;
+	      const params = "api_key="+
+		    new Map(document.cookie.split("; ").map(cookie => cookie.split('='))).get('session')
+		  +"&text="+data;
+	      xhr.open("POST", url, true);
+	      xhr.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
+	      xhr.onreadystatechange = function() {
+		  if (this.readyState == XMLHttpRequest.DONE && this.status == 200) {
+		      console.log(xhr.responseText);
+		      window.location.replace("/cms/");
+		  }
+	      };
+	      xhr.send(params);
+	  }
+	  </script>
+	<article>
+	    <label for "blog_name">Blog name
+	      <input type="text" id="blog_name" name="blog_name" placeholder="{{ blog_name }}">
+	    </label>
+	    <button onclick="req('/api/blognameEdit', document.getElementById('blog_name').value)">change</button>
+	    <label for "password">Author name
+	      <input type="text" id="author_name" name="author_name" placeholder="{{ author_name }}">
+	    </label>
+	    <button onclick="req('/api/authornameEdit', document.getElementById('author_name').value)">change</button>
+	</article>
 	<article>
 	  <h2 class="title"><a href="/cms/index"><b>Index page</b></a></h2>
 	  <p><a href="/cms/index"><b>Edit page</b></a></p>

@@ -11,7 +11,7 @@ use cache::Cache;
 mod rogger_cfg;
 use rogger_cfg::{BLOG_NAME, YOUR_NAME};
 mod dynamic_site;
-use dynamic_site::Pages;
+use dynamic_site::{Pages, DynVal};
 
 #[derive(Template)]
 #[template(path = "index.html")]
@@ -21,8 +21,8 @@ struct IndexTemplate<'a> {
 }
 
 #[get("/")]
-async fn index(pages: web::Data<Pages>) -> HttpResponse {
-    let index_file = IndexTemplate { blog_name: BLOG_NAME, index_data: &pages.get_site(0).html_content, };
+async fn index(pages: web::Data<Pages>, strings: web::Data<DynVal>) -> HttpResponse {
+    let index_file = IndexTemplate { blog_name: &strings.get_s(0), index_data: &pages.get_site(0).html_content, };
     HttpResponse::Ok().body(index_file.render().unwrap())
 }
 
@@ -34,8 +34,8 @@ struct AboutMeTemplate<'a> {
 }
 
 #[get("/aboutme")]
-async fn aboutme(pages: web::Data<Pages>) -> HttpResponse {
-    let aboutme_site = AboutMeTemplate { blog_name: BLOG_NAME, aboutme_data: &pages.get_site(1).html_content, };
+async fn aboutme(pages: web::Data<Pages>, strings: web::Data<DynVal>) -> HttpResponse {
+    let aboutme_site = AboutMeTemplate { blog_name: &strings.get_s(0), aboutme_data: &pages.get_site(1).html_content, };
     HttpResponse::Ok().body(aboutme_site.render().unwrap())
 }
 
@@ -50,7 +50,7 @@ struct PostsTemplate<'a> {
 }
 
 #[get("/posts/{pathid}")]
-async fn list_posts(pathid: actix_web::web::Path<usize>, cache: web::Data<Cache>) -> HttpResponse {
+async fn list_posts(pathid: actix_web::web::Path<usize>, cache: web::Data<Cache>, strings: web::Data<DynVal>) -> HttpResponse {
     let con = Connection::open("rogger.db").unwrap();
     let inner_path = pathid.into_inner();
     let offset = if inner_path > 1 {
@@ -67,7 +67,7 @@ async fn list_posts(pathid: actix_web::web::Path<usize>, cache: web::Data<Cache>
 	     return HttpResponse::Ok().body("Cannot find posts with this id");
 	 }
     }
-    let posts_file = PostsTemplate { blog_name: BLOG_NAME, your_name: YOUR_NAME, posts: &posts, counter: [offset-1, offset, offset+1], curr_page: offset };
+    let posts_file = PostsTemplate { blog_name: &strings.get_s(0), your_name: &strings.get_s(1), posts: &posts, counter: [offset-1, offset, offset+1], curr_page: offset };
     HttpResponse::Ok().body(posts_file.render().unwrap())
 }
 
@@ -81,7 +81,7 @@ struct PostTemplate<'a> {
 }
 
 #[get("/post/{pid}")]
-async fn get_post(pid: actix_web::web::Path<usize>, cache: web::Data<Cache>) -> HttpResponse {
+async fn get_post(pid: actix_web::web::Path<usize>, cache: web::Data<Cache>, strings: web::Data<DynVal>) -> HttpResponse {
     let con = Connection::open("rogger.db").unwrap();
     let inner_pid = pid.into_inner();
     let post: Post;
@@ -94,15 +94,23 @@ async fn get_post(pid: actix_web::web::Path<usize>, cache: web::Data<Cache>) -> 
 	    return HttpResponse::NotFound().body("Post with this id does not exist");
 	}
     }
-    let post_file = PostTemplate { blog_name: BLOG_NAME, post_name: &post.title, post_text: &post.html_content, post_date: &post.date };
+    let post_file = PostTemplate { blog_name: &strings.get_s(0), post_name: &post.title, post_text: &post.html_content, post_date: &post.date };
     HttpResponse::Ok().body(post_file.render().unwrap())
 }
 
+#[derive(Template)]
+#[template(path = "cms/index.html")]
+struct CMSTemplate<'a> {
+    blog_name: &'a str,
+    author_name: &'a str,
+}
+
 #[get("/cms/")]
-async fn cms(req: HttpRequest) -> HttpResponse {
+async fn cms(req: HttpRequest, strings: web::Data<DynVal>) -> HttpResponse {
     if let Some(cookie) = req.cookie("session") {
 	if User::validate_key(cookie.value().to_string(), "sessions") {
-	    HttpResponse::Ok().body(include_str!("../templates/cms/index.html").to_string())
+	    let cms_file = CMSTemplate { blog_name: &strings.get_s(0), author_name: &strings.get_s(1), };
+	    HttpResponse::Ok().body(cms_file.render().unwrap())
 	} else {
 	    HttpResponse::Found().append_header(("Location","/cms/login")).finish()
 	}
@@ -160,7 +168,7 @@ struct CmsPostsTemplate<'a> {
 }
 
 #[get("/cms/posts/{pathid}")]
-async fn cms_posts(pathid: actix_web::web::Path<usize>, cache: web::Data<Cache>, req: HttpRequest) -> HttpResponse {
+async fn cms_posts(pathid: actix_web::web::Path<usize>, cache: web::Data<Cache>, req: HttpRequest, strings: web::Data<DynVal>) -> HttpResponse {
    if let Some(cookie) = req.cookie("session") {
       if User::validate_key(cookie.value().to_string(), "sessions") {
 	  let con = Connection::open("rogger.db").unwrap();
@@ -179,7 +187,7 @@ async fn cms_posts(pathid: actix_web::web::Path<usize>, cache: web::Data<Cache>,
 		  return HttpResponse::Ok().body("Cannot find posts with this id");
 	      }
 	  }
-	  let posts_file = CmsPostsTemplate { your_name: YOUR_NAME, posts: &posts, counter: [offset-1, offset, offset+1], curr_page: offset };
+	  let posts_file = CmsPostsTemplate { your_name: &strings.get_s(1), posts: &posts, counter: [offset-1, offset, offset+1], curr_page: offset };
 	  HttpResponse::Ok().body(posts_file.render().unwrap())
       } else {
           HttpResponse::Found().append_header(("Location","/cms/login")).finish()
@@ -394,6 +402,26 @@ async fn index_edit(form: web::Form<AboutMeForm>, pages: web::Data<Pages>) -> Ht
     }
 }
 
+#[post("/api/blognameEdit")]
+async fn blogname_edit(form: web::Form<AboutMeForm>, strings: web::Data<DynVal>) -> HttpResponse {
+    if User::validate_key(form.api_key.to_string(), "keys") || User::validate_key(form.api_key.to_string(), "sessions")  {
+	strings.modify_s(0, form.text.to_string());
+	HttpResponse::Ok().body("Blog name has been modified")
+    } else {
+	HttpResponse::Unauthorized().body("Api key is not correct")
+    }
+}
+
+#[post("/api/authornameEdit")]
+async fn author_edit(form: web::Form<AboutMeForm>, strings: web::Data<DynVal>) -> HttpResponse {
+    if User::validate_key(form.api_key.to_string(), "keys") || User::validate_key(form.api_key.to_string(), "sessions")  {
+	strings.modify_s(1, form.text.to_string());
+	HttpResponse::Ok().body("Author name has been modified")
+    } else {
+	HttpResponse::Unauthorized().body("Api key is not correct")
+    }
+}
+
 #[get("/css/main.css")]
 async fn css_main() -> HttpResponse {
     let css_file = include_str!("../templates/css/main.css");
@@ -415,10 +443,12 @@ async fn main() -> std::io::Result<()> {
     User::init_master();
     let cache = web::Data::new(Cache::new());
     let pages = web::Data::new(Pages::new());
+    let strings = web::Data::new(DynVal::new(vec![BLOG_NAME.to_string(), YOUR_NAME.to_string()]));
     HttpServer::new(move || {
         App::new()
 	    .app_data(cache.clone())
 	    .app_data(pages.clone())
+	    .app_data(strings.clone())
             .service(index)
 	    .service(index_edit)
 	    .service(web::redirect("/posts", "/posts/1"))
@@ -444,6 +474,8 @@ async fn main() -> std::io::Result<()> {
 	    .service(end_session)
 	    .service(aboutme)
 	    .service(aboutme_edit)
+	    .service(blogname_edit)
+	    .service(author_edit)
 })
     .bind(("0.0.0.0", 1337))?
     .run()

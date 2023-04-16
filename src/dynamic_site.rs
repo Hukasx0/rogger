@@ -29,3 +29,21 @@ impl Pages {
 	self.pages.write().unwrap()[id] = Page::new(&content);
     }
 }
+
+pub struct DynVal {
+    pub strings: RwLock<Vec<String>>,
+}
+
+impl DynVal {
+    pub fn new(vs: Vec<String>) -> Self {
+	DynVal { strings: RwLock::new(vs), }
+    }
+
+    pub fn get_s(&self, id: usize) -> String {
+	self.strings.read().unwrap()[id].to_string()
+    }
+
+    pub fn modify_s(&self, id: usize, content: String) {
+	self.strings.write().unwrap()[id] = content;
+    }
+}
