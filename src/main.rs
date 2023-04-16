@@ -102,7 +102,7 @@ async fn get_post(pid: actix_web::web::Path<usize>, cache: web::Data<Cache>) -> 
 async fn cms(req: HttpRequest) -> HttpResponse {
     if let Some(cookie) = req.cookie("session") {
 	if User::validate_key(cookie.value().to_string(), "sessions") {
-	    HttpResponse::Found().append_header(("Location","/cms/posts/1")).finish()
+	    HttpResponse::Ok().body(include_str!("../templates/cms/index.html").to_string())
 	} else {
 	    HttpResponse::Found().append_header(("Location","/cms/login")).finish()
 	}
@@ -126,7 +126,7 @@ struct CmsLogin {
 async fn cms_login(form: web::Form<CmsLogin>) -> HttpResponse {
    if User::validate(form.login.to_string(), form.password.to_string()) {
        let session_cookie = CookieBuilder::new("session", User::new_session()).path("/").max_age(Duration::minutes(10)).finish();
-       HttpResponse::Found().cookie(session_cookie).append_header(("Location","/cms/posts/1")).finish()
+       HttpResponse::Found().cookie(session_cookie).append_header(("Location","/cms/")).finish()
    } else {
       HttpResponse::Unauthorized().body("Wrong credentials")
    }   
