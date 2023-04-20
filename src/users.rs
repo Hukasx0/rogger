@@ -29,7 +29,7 @@ impl User {
 
      pub fn validate(login: String, password: String) -> bool {
 	 let redis_url = env::var("REDIS_URL").unwrap_or_else(|_| String::from("redis://127.0.0.1"));
-     let client = Client::open(redis_url).unwrap();
+	 let client = Client::open(redis_url).unwrap();
 	 let mut con = client.get_connection().unwrap();
 	 let get_master: Option<String> = con.hget("users", login.to_string()).unwrap();
 	 match get_master {
@@ -62,17 +62,31 @@ impl User {
 	 format!("{:x}", key_hash)
      }
 
-     pub fn validate_key(api_key: String, typev: &str) -> bool {
-		let redis_url = env::var("REDIS_URL").unwrap_or_else(|_| String::from("redis://127.0.0.1"));
+    pub fn validate_key(api_key: String, typev: &str) -> bool {
+	let redis_url = env::var("REDIS_URL").unwrap_or_else(|_| String::from("redis://127.0.0.1"));
         let client = Client::open(redis_url).unwrap();
 	let mut con = client.get_connection().unwrap();
 	let options = LposOptions::default();
 	let key_index: Option<i32> = con.lpos(typev, api_key, options).unwrap();
      	match key_index {
-	   Some(_) => true,
-	   None => false,
+	    Some(_) => true,
+	    None => false,
 	}
-     }
+    }
+
+    pub fn get_keys() -> Vec<String> {
+	let redis_url = env::var("REDIS_URL").unwrap_or_else(|_| String::from("redis://127.0.0.1"));
+     	let client = Client::open(redis_url).unwrap();
+	let mut con = client.get_connection().unwrap();
+	con.lrange("keys", 0, -1).unwrap()
+    }
+
+    pub fn rm_key(api_key: String) {
+	let redis_url = env::var("REDIS_URL").unwrap_or_else(|_| String::from("redis://127.0.0.1"));
+     	let client = Client::open(redis_url).unwrap();
+	let mut con = client.get_connection().unwrap();
+	let _: () = con.lrem("keys", 1, api_key).unwrap();	
+    }
 
      pub fn new_session() -> String {
          let rng_str: String = Alphanumeric.sample_string(&mut rand::thread_rng(), 48);

@@ -245,7 +245,6 @@ async fn cms_index(req: HttpRequest, pages: web::Data<Pages>) -> HttpResponse {
     }
 }
 
-
 #[get("/cms/aboutme")]
 async fn cms_aboutme(req: HttpRequest, pages: web::Data<Pages>) -> HttpResponse {
     if let Some(cookie) = req.cookie("session") {
@@ -260,6 +259,26 @@ async fn cms_aboutme(req: HttpRequest, pages: web::Data<Pages>) -> HttpResponse 
     }
 }
 
+
+#[derive(Template)]
+#[template(path = "cms/auth.html")]
+struct AuthTemplate<'a> {
+    api_keys: &'a [String],
+}
+
+#[get("/cms/authorization")]
+async fn cms_auth(req: HttpRequest) -> HttpResponse {
+    if let Some(cookie) = req.cookie("session") {
+	if User::validate_key(cookie.value().to_string(), "sessions") {
+	    let auth_file = AuthTemplate { api_keys: &User::get_keys() };
+	    HttpResponse::Ok().body(auth_file.render().unwrap())
+	} else {
+	    HttpResponse::Found().append_header(("Location","/cms/login")).finish()
+	}
+    } else {
+	HttpResponse::Found().append_header(("Location","/cms/login")).finish()
+    }
+}
 
 #[derive(Template)]
 #[template(path = "cms/post.html")]
@@ -368,12 +387,41 @@ struct Login {
 
 #[post("/api/genKey")]
 async fn generate_key(form: web::Form<Login>) -> HttpResponse {
-   if User::validate(form.login.to_string(), form.password.to_string()) {
+   if User::validate(form.login.to_string(), form.password.to_string()) || User::validate_key(form.password.to_string(), "sessions") {
       HttpResponse::Ok().body(User::new_key())
    }
    else {
       HttpResponse::Unauthorized().body("Your login credentials are not correct")
    }
+}
+
+#[post("/api/getKeys")]
+async fn get_keys(form: web::Form<Login>) -> HttpResponse {
+    if User::validate(form.login.to_string(), form.password.to_string()) {
+	HttpResponse::Ok().body(User::get_keys().join("\n"))
+    }
+    else {
+	HttpResponse::Unauthorized().body("Your login credentials are not correct")
+    }
+}
+
+
+#[derive(Deserialize)]
+struct RmKey {
+    login: String,
+    password: String,
+    key: String,
+}
+
+#[post("/api/rmKey")]
+async fn rm_key(form: web::Form<RmKey>) -> HttpResponse {
+    if User::validate(form.login.to_string(), form.password.to_string()) || User::validate_key(form.password.to_string(), "sessions")  {
+	User::rm_key(form.key.to_string());
+	HttpResponse::Ok().body(format!("Removed {} key",form.key))
+    }
+    else {
+	HttpResponse::Unauthorized().body("Your login credentials are not correct")
+    }
 }
 
 #[derive(Deserialize)]
@@ -459,6 +507,8 @@ async fn main() -> std::io::Result<()> {
             .service(modify_post)
             .service(remove_post)
 	    .service(generate_key)
+	    .service(get_keys)
+	    .service(rm_key)
             .service(css_main)
 	    .service(css_cms)
 	    .service(web::redirect("/cms", "/cms/"))
@@ -468,6 +518,7 @@ async fn main() -> std::io::Result<()> {
 	    .service(cms_add_post)
 	    .service(cms_aboutme)
 	    .service(cms_index)
+	    .service(cms_auth)
 	    .service(cms_edit_post)
 	    .service(cms_login)
 	    .service(cms_login_site)

@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html data-theme="dark">
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Authorization | Rogger</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@1/css/pico.min.css">
+  </head>
+  <body>
+    <script>
+      function rmk(key) {
+	  const xhr = new XMLHttpRequest();
+          const url = "/api/rmKey";
+          const params = "login=xyz&password="+
+		new Map(document.cookie.split("; ").map(cookie => cookie.split('='))).get('session')
+              +"&key="+key;
+	  xhr.open("POST", url, true);
+          xhr.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
+          xhr.onreadystatechange = function() {
+              if (this.readyState == XMLHttpRequest.DONE && this.status == 200) {
+                  console.log(xhr.responseText);
+              }
+          };
+          xhr.send(params);
+	  xhr.addEventListener('load', function() {
+	      if (xhr.status === 200) {
+		  window.location.reload();
+	      }
+	  });
+      }
+
+      function newKey() {
+	  const xhr = new XMLHttpRequest();
+          const url = "/api/genKey";
+          const params = "login=xyz&password="+
+		new Map(document.cookie.split("; ").map(cookie => cookie.split('='))).get('session');
+	  xhr.open("POST", url, true);
+          xhr.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
+          xhr.onreadystatechange = function() {
+              if (this.readyState == XMLHttpRequest.DONE && this.status == 200) {
+                  console.log(xhr.responseText);
+              }
+          };
+          xhr.send(params);
+	  xhr.addEventListener('load', function() {
+	      if (xhr.status === 200) {
+		  window.location.reload();
+	      }
+	  });
+      }
+    </script>
+    <nav>
+      <ul>
+	<li><strong>Rogger</strong></li>
+      </ul>
+      <ul>
+	<li><a href="/cms/">Main</a></li>
+	<li><a href="/cms/posts/1">Posts</a></li>
+	<li><b>Authorization</b></li>
+      </ul>
+    </nav>
+    <nav aria-label="breadcrumb">
+      <ul>
+	<li><a href="/cms">Cms</a></li>
+	<li>Authorization</li>
+      </ul>
+    </nav>
+    <main>
+      <p align="center">You are logged as <b>Rogger_Admin</b> <a href="/api/endSession">Logout</a></p>
+      <div class="container">
+	<article>
+	  <h3><b>Api keys:</b></h3>
+	  <button onclick="newKey()">Generate new key</button>
+	  {% for key in api_keys %}
+	  <p>{{ key }} <b style="cursor: pointer;" onclick="rmk('{{ key }}')">delete</b></p>
+	  {% endfor %}
+	</article>
+      </div>
+    </main>
+  </body>
+</html>
