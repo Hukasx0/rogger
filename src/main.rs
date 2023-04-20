@@ -8,8 +8,6 @@ mod users;
 use users::User;
 mod cache;
 use cache::Cache;
-mod rogger_cfg;
-use rogger_cfg::{BLOG_NAME, YOUR_NAME};
 mod dynamic_site;
 use dynamic_site::{Pages, DynVal};
 
@@ -101,6 +99,7 @@ async fn get_post(pid: actix_web::web::Path<usize>, cache: web::Data<Cache>, str
 #[derive(Template)]
 #[template(path = "cms/index.html")]
 struct CMSTemplate<'a> {
+    master_user_login: &'a str,
     blog_name: &'a str,
     author_name: &'a str,
 }
@@ -109,7 +108,7 @@ struct CMSTemplate<'a> {
 async fn cms(req: HttpRequest, strings: web::Data<DynVal>) -> HttpResponse {
     if let Some(cookie) = req.cookie("session") {
 	if User::validate_key(cookie.value().to_string(), "sessions") {
-	    let cms_file = CMSTemplate { blog_name: &strings.get_s(0), author_name: &strings.get_s(1), };
+	    let cms_file = CMSTemplate { master_user_login: &strings.get_s(2), blog_name: &strings.get_s(0), author_name: &strings.get_s(1), };
 	    HttpResponse::Ok().body(cms_file.render().unwrap())
 	} else {
 	    HttpResponse::Found().append_header(("Location","/cms/login")).finish()
@@ -161,6 +160,7 @@ async fn end_session(req: HttpRequest) -> HttpResponse {
 #[derive(Template)]
 #[template(path = "cms/posts.html")]
 struct CmsPostsTemplate<'a> {
+    master_user_login: &'a str,
     your_name: &'a str,
     posts: &'a [Post],
     counter: [usize; 3],
@@ -187,7 +187,7 @@ async fn cms_posts(pathid: actix_web::web::Path<usize>, cache: web::Data<Cache>,
 		  return HttpResponse::Ok().body("Cannot find posts with this id");
 	      }
 	  }
-	  let posts_file = CmsPostsTemplate { your_name: &strings.get_s(1), posts: &posts, counter: [offset-1, offset, offset+1], curr_page: offset };
+	  let posts_file = CmsPostsTemplate { master_user_login: &strings.get_s(2), your_name: &strings.get_s(1), posts: &posts, counter: [offset-1, offset, offset+1], curr_page: offset };
 	  HttpResponse::Ok().body(posts_file.render().unwrap())
       } else {
           HttpResponse::Found().append_header(("Location","/cms/login")).finish()
@@ -264,13 +264,14 @@ async fn cms_aboutme(req: HttpRequest, pages: web::Data<Pages>) -> HttpResponse 
 #[template(path = "cms/auth.html")]
 struct AuthTemplate<'a> {
     api_keys: &'a [String],
+    master_user_login: &'a str,
 }
 
 #[get("/cms/authorization")]
-async fn cms_auth(req: HttpRequest) -> HttpResponse {
+async fn cms_auth(req: HttpRequest, strings: web::Data<DynVal>) -> HttpResponse {
     if let Some(cookie) = req.cookie("session") {
 	if User::validate_key(cookie.value().to_string(), "sessions") {
-	    let auth_file = AuthTemplate { api_keys: &User::get_keys() };
+	    let auth_file = AuthTemplate { api_keys: &User::get_keys(), master_user_login: &strings.get_s(2) };
 	    HttpResponse::Ok().body(auth_file.render().unwrap())
 	} else {
 	    HttpResponse::Found().append_header(("Location","/cms/login")).finish()
@@ -470,6 +471,29 @@ async fn author_edit(form: web::Form<AboutMeForm>, strings: web::Data<DynVal>) -
     }
 }
 
+#[derive(Deserialize)]
+struct NewUsername {
+    login: String,
+    password: String,
+    new_username: String,
+}
+
+#[post("/api/newMasterUser")]
+async fn master_new(form: web::Form<NewUsername>, strings: web::Data<DynVal>) -> HttpResponse {
+    if User::validate(form.login.to_string(), form.password.to_string()) || User::validate_key(form.password.to_string(), "sessions")  {
+	if form.new_username != "" {
+	    let password: &str = &User::new_master_user(&form.new_username);
+	    strings.modify_s(2, form.new_username.to_string());
+	    HttpResponse::Ok().body(format!("New master user credentials:\nusername: {}\npassword: {}\n",form.new_username, password))
+	} else {
+	    HttpResponse::BadRequest().body("Master user username cannot be empty")
+	}
+    }
+    else {
+	HttpResponse::Unauthorized().body("Your login credentials are not correct")
+    }
+}
+
 #[get("/css/main.css")]
 async fn css_main() -> HttpResponse {
     let css_file = include_str!("../templates/css/main.css");
@@ -491,7 +515,7 @@ async fn main() -> std::io::Result<()> {
     User::init_master();
     let cache = web::Data::new(Cache::new());
     let pages = web::Data::new(Pages::new());
-    let strings = web::Data::new(DynVal::new(vec![BLOG_NAME.to_string(), YOUR_NAME.to_string()]));
+    let strings = web::Data::new(DynVal::new(vec![String::from("Example blog name"), String::from("blogger"), String::from("Rogger_Admin")]));
     HttpServer::new(move || {
         App::new()
 	    .app_data(cache.clone())
@@ -519,6 +543,7 @@ async fn main() -> std::io::Result<()> {
 	    .service(cms_aboutme)
 	    .service(cms_index)
 	    .service(cms_auth)
+	    .service(master_new)
 	    .service(cms_edit_post)
 	    .service(cms_login)
 	    .service(cms_login_site)

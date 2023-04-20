@@ -49,6 +49,27 @@
 		  window.location.reload();
 	      }
 	  });
+      }      
+
+      function newMasterUser() {
+	  const xhr = new XMLHttpRequest();
+          const url = "/api/newMasterUser";
+          const params = "login=xyz&password="+
+		new Map(document.cookie.split("; ").map(cookie => cookie.split('='))).get('session')
+	      +"&new_username="+document.getElementById("master_login").value;
+	  xhr.open("POST", url, true);
+          xhr.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
+          xhr.onreadystatechange = function() {
+              if (this.readyState == XMLHttpRequest.DONE && this.status == 200) {
+                  alert(xhr.responseText);
+              }
+          };
+          xhr.send(params);
+	  xhr.addEventListener('load', function() {
+	      if (xhr.status === 200) {
+		  window.location.reload();
+	      }
+	  });
       }
     </script>
     <nav>
@@ -68,8 +89,15 @@
       </ul>
     </nav>
     <main>
-      <p align="center">You are logged as <b>Rogger_Admin</b> <a href="/api/endSession">Logout</a></p>
+      <p align="center">You are logged as <b>{{ master_user_login }}</b> <a href="/api/endSession">Logout</a></p>
       <div class="container">
+	<article>
+	  <label for "master_login">Master user username
+	    <input type="text" id="master_login" name="master_login" placeholder="{{ master_user_login }}">
+	  </label>
+	  <p>(Password is generated randomly for safety reasons)</p>
+	  <button onclick="newMasterUser()">Create new master user</button>
+	</article>
 	<article>
 	  <h3><b>Api keys:</b></h3>
 	  <button onclick="newKey()">Generate new key</button>

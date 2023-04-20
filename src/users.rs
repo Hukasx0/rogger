@@ -2,7 +2,6 @@ use sha2::{Sha256, Sha512, Digest};
 use rand::distributions::{Alphanumeric, DistString};
 use redis::{Commands, Client, LposOptions, RedisResult};
 use std::env;
-use crate::rogger_cfg::MASTER_USER_LOGIN;
 
 pub struct User {}
 
@@ -16,7 +15,7 @@ impl User {
 	    Err(error) => { println!("Cannot connect to Redis because of: {}", error);
 	                    std::process::exit(1); }
 	}
-	let username = MASTER_USER_LOGIN;
+	let username = "Rogger_Admin";
 	let rng_str: String = Alphanumeric.sample_string(&mut rand::thread_rng(), 32);
 	println!("Master user credentials:\nusername: {}\npassword: {}\nDO NOT SHARE IT WITH ANYONE!",username,rng_str);
         let mut hasher = Sha512::new();
@@ -26,7 +25,20 @@ impl User {
 	let _: () = con.del("keys").unwrap();
         let _: () = con.del("sessions").unwrap();
      }
-
+    
+    pub fn new_master_user(username: &str) -> String {
+	let redis_url = env::var("REDIS_URL").unwrap_or_else(|_| String::from("redis://127.0.0.1"));
+	let client = Client::open(redis_url).unwrap();
+	let mut con = client.get_connection().unwrap();
+	let _: () = con.del("users").unwrap();
+	let rng_str: String = Alphanumeric.sample_string(&mut rand::thread_rng(), 32);
+	let mut hasher = Sha512::new();
+        hasher.update(rng_str.to_string());
+	let master_hash = hasher.finalize();
+	let _: () = con.hset("users", username, format!("{:x}", master_hash)).unwrap();
+	rng_str
+    }
+	
      pub fn validate(login: String, password: String) -> bool {
 	 let redis_url = env::var("REDIS_URL").unwrap_or_else(|_| String::from("redis://127.0.0.1"));
 	 let client = Client::open(redis_url).unwrap();
