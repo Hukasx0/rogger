@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{{ post_name }} | {{blog_name}}</title>
+    <title>{{ post_name }} | {{ blog_name }}</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@1/css/pico.min.css">
 </head>
 <body>
@@ -17,7 +17,7 @@
     </ul>
   </nav>
   <article>
-    <h1 class="title" align="center"><b>{{ post_name }}</b></h1>
+    <h1 class="title"><b>{{ post_name }}</b></h1>
     <span class="date">{{ post_date }}</span>
     <p class="description">{{ post_text|safe }}</p>
   </article>

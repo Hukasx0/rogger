@@ -6,9 +6,25 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{ operation }} post | Rogger</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/simplemde/latest/simplemde.min.css">
-    <link rel="stylesheet" href="../css/cms.css">
-    <link rel="stylesheet" href="../../css/cms.css">
     <script src="https://cdn.jsdelivr.net/simplemde/latest/simplemde.min.js"></script>
+    <style>
+      .CodeMirror,
+      .CodeMirror-scroll {
+	  color: #e1e6eb;
+	  background-color: #11191f;
+      }
+
+      .CodeMirror-cursor {
+	  border-left: 1px solid  #e1e6eb !important;
+      }
+
+      .editor-preview-side,
+      .editor-preview-active,
+      .editor-preview-active-side {
+	  color: #e1e6eb;
+	  background-color: #11191f;
+      }
+    </style>
 </head>
 <body>
   <textarea id="editor" name="markdown"></textarea>
@@ -54,7 +70,7 @@
 		    };
 		    xhr.send(params);
 		},
-		className: "fa fa-{{ operation }}", // upload or edit
+		className: "fa fa-{{ operation }}",
 		title: "{{ operation }}",
             }
 	]

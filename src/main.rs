@@ -494,18 +494,6 @@ async fn master_new(form: web::Form<NewUsername>, strings: web::Data<DynVal>) ->
     }
 }
 
-#[get("/css/main.css")]
-async fn css_main() -> HttpResponse {
-    let css_file = include_str!("../templates/css/main.css");
-    HttpResponse::Ok().body(css_file)
-}
-
-#[get("css/cms.css")]
-async fn css_cms() -> HttpResponse {
-    let css_file = include_str!("../templates/css/cms.css");
-    HttpResponse::Ok().body(css_file)
-}
-
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     match Database::new() {
@@ -533,8 +521,6 @@ async fn main() -> std::io::Result<()> {
 	    .service(generate_key)
 	    .service(get_keys)
 	    .service(rm_key)
-            .service(css_main)
-	    .service(css_cms)
 	    .service(web::redirect("/cms", "/cms/"))
 	    .service(cms)
 	    .service(web::redirect("/cms/posts", "/cms/posts/1"))

@@ -51,12 +51,12 @@
     <p align="center">You are logged as <b>{{ master_user_login }}</b> <a href="/api/endSession">Logout</a></p>
         <div class="container">
 	   <article>
-	   <h2 class="title"><a href="/cms/post_new"><b>Add new post</b></a></h2>
+	   <h1 class="title"><a href="/cms/post_new"><b>Add new post</b></a></h1>
 	</article>
          {% for post in posts %}
 	<article>
-	  <h2 class="title"><a href="/cms/post_edit/{{ post.id }}"><b>{{ post.title }}</b></a></h2>
-	  <p class="description">{{ post.content }}</p>
+	  <h1 class="title"><a href="/cms/post_edit/{{ post.id }}"><b>{{ post.title }}</b></a></h1>
+	  <p class="description">{{ post.html_content|safe }}</p>
 	  <span class="date">{{ post.date }}</span>
 	  <p>Author: <a href="/cms/aboutme"><b>{{ your_name }}</b></a></p>
 	  <p class="remove-link" onclick="rmp({{ post.id }})"><b>remove post</b></p>

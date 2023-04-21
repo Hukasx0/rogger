@@ -19,8 +19,9 @@
       <div class="container">
 	{% for post in posts %}
 	<article>
-	  <h2 class="title"><a href="/post/{{ post.id }}"><b>{{ post.title }}</b></a></h2>
+	  <h1 class="title"><a href="/post/{{ post.id }}"><b>{{ post.title }}</b></a></h1>
 	  <p class="description">{{ post.content }}</p>
+	  <p><b><a href="/post/{{ post.id }}">Read more</a></b></p>
 	  <span class="date">{{ post.date }}</span>
 	  <p>Author: <a href="/aboutme"><b>{{ your_name }}</b></a></p>
 	</article>
