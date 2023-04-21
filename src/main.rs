@@ -16,11 +16,12 @@ use dynamic_site::{Pages, DynVal};
 struct IndexTemplate<'a> {
     blog_name: &'a str,
     index_data: &'a str,
+    favicon: &'a str,
 }
 
 #[get("/")]
 async fn index(pages: web::Data<Pages>, strings: web::Data<DynVal>) -> HttpResponse {
-    let index_file = IndexTemplate { blog_name: &strings.get_s(0), index_data: &pages.get_site(0).html_content, };
+    let index_file = IndexTemplate { blog_name: &strings.get_s(0), index_data: &pages.get_site(0).html_content, favicon: &strings.get_s(3), };
     HttpResponse::Ok().body(index_file.render().unwrap())
 }
 
@@ -29,11 +30,12 @@ async fn index(pages: web::Data<Pages>, strings: web::Data<DynVal>) -> HttpRespo
 struct AboutMeTemplate<'a> {
     blog_name: &'a str,
     aboutme_data: &'a str,
+    favicon: &'a str,
 }
 
 #[get("/aboutme")]
 async fn aboutme(pages: web::Data<Pages>, strings: web::Data<DynVal>) -> HttpResponse {
-    let aboutme_site = AboutMeTemplate { blog_name: &strings.get_s(0), aboutme_data: &pages.get_site(1).html_content, };
+    let aboutme_site = AboutMeTemplate { blog_name: &strings.get_s(0), aboutme_data: &pages.get_site(1).html_content, favicon: &strings.get_s(3), };
     HttpResponse::Ok().body(aboutme_site.render().unwrap())
 }
 
@@ -45,6 +47,7 @@ struct PostsTemplate<'a> {
     posts: &'a [Post],
     counter: [usize; 3],
     curr_page: usize,
+    favicon: &'a str,
 }
 
 #[get("/posts/{pathid}")]
@@ -65,7 +68,7 @@ async fn list_posts(pathid: actix_web::web::Path<usize>, cache: web::Data<Cache>
 	     return HttpResponse::Ok().body("Cannot find posts with this id");
 	 }
     }
-    let posts_file = PostsTemplate { blog_name: &strings.get_s(0), your_name: &strings.get_s(1), posts: &posts, counter: [offset-1, offset, offset+1], curr_page: offset };
+    let posts_file = PostsTemplate { blog_name: &strings.get_s(0), your_name: &strings.get_s(1), posts: &posts, counter: [offset-1, offset, offset+1], curr_page: offset, favicon: &strings.get_s(3), };
     HttpResponse::Ok().body(posts_file.render().unwrap())
 }
 
@@ -76,6 +79,7 @@ struct PostTemplate<'a> {
     post_name: &'a str,
     post_text: &'a str,
     post_date: &'a str,
+    favicon: &'a str,
 }
 
 #[get("/post/{pid}")]
@@ -92,7 +96,7 @@ async fn get_post(pid: actix_web::web::Path<usize>, cache: web::Data<Cache>, str
 	    return HttpResponse::NotFound().body("Post with this id does not exist");
 	}
     }
-    let post_file = PostTemplate { blog_name: &strings.get_s(0), post_name: &post.title, post_text: &post.html_content, post_date: &post.date };
+    let post_file = PostTemplate { blog_name: &strings.get_s(0), post_name: &post.title, post_text: &post.html_content, post_date: &post.date, favicon: &strings.get_s(3), };
     HttpResponse::Ok().body(post_file.render().unwrap())
 }
 
@@ -102,13 +106,14 @@ struct CMSTemplate<'a> {
     master_user_login: &'a str,
     blog_name: &'a str,
     author_name: &'a str,
+    favicon: &'a str,
 }
 
 #[get("/cms/")]
 async fn cms(req: HttpRequest, strings: web::Data<DynVal>) -> HttpResponse {
     if let Some(cookie) = req.cookie("session") {
 	if User::validate_key(cookie.value().to_string(), "sessions") {
-	    let cms_file = CMSTemplate { master_user_login: &strings.get_s(2), blog_name: &strings.get_s(0), author_name: &strings.get_s(1), };
+	    let cms_file = CMSTemplate { master_user_login: &strings.get_s(2), blog_name: &strings.get_s(0), author_name: &strings.get_s(1), favicon: &strings.get_s(3), };
 	    HttpResponse::Ok().body(cms_file.render().unwrap())
 	} else {
 	    HttpResponse::Found().append_header(("Location","/cms/login")).finish()
@@ -471,6 +476,16 @@ async fn author_edit(form: web::Form<AboutMeForm>, strings: web::Data<DynVal>) -
     }
 }
 
+#[post("/api/faviconEdit")]
+async fn favicon_edit(form: web::Form<AboutMeForm>, strings: web::Data<DynVal>) -> HttpResponse {
+    if User::validate_key(form.api_key.to_string(), "keys") || User::validate_key(form.api_key.to_string(), "sessions")  {
+	strings.modify_s(3, form.text.to_string());
+	HttpResponse::Ok().body("Favicon link has been modified")
+    } else {
+	HttpResponse::Unauthorized().body("Api key is not correct")
+    }
+}
+
 #[derive(Deserialize)]
 struct NewUsername {
     login: String,
@@ -494,6 +509,11 @@ async fn master_new(form: web::Form<NewUsername>, strings: web::Data<DynVal>) ->
     }
 }
 
+#[get("/favicon.ico")]
+async fn favicon() -> HttpResponse {
+    HttpResponse::Ok().body(include_bytes!("../templates/img/favicon.ico").to_vec())
+}
+
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     match Database::new() {
@@ -503,7 +523,7 @@ async fn main() -> std::io::Result<()> {
     User::init_master();
     let cache = web::Data::new(Cache::new());
     let pages = web::Data::new(Pages::new());
-    let strings = web::Data::new(DynVal::new(vec![String::from("Example blog name"), String::from("blogger"), String::from("Rogger_Admin")]));
+    let strings = web::Data::new(DynVal::new(vec![String::from("Example blog name"), String::from("blogger"), String::from("Rogger_Admin"), String::from("/favicon.ico")]));
     HttpServer::new(move || {
         App::new()
 	    .app_data(cache.clone())
@@ -538,6 +558,8 @@ async fn main() -> std::io::Result<()> {
 	    .service(aboutme_edit)
 	    .service(blogname_edit)
 	    .service(author_edit)
+	    .service(favicon_edit)
+	    .service(favicon)
 })
     .bind(("0.0.0.0", 1337))?
     .run()

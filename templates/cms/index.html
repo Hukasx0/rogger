@@ -7,6 +7,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>CMS | Rogger</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@1/css/pico.min.css">
+    <link rel="icon" type="image/x-icon" href="/favicon.ico">
   </head>
   <body>
     <nav>
@@ -50,10 +51,14 @@
 	      <input type="text" id="blog_name" name="blog_name" placeholder="{{ blog_name }}">
 	    </label>
 	    <button onclick="req('/api/blognameEdit', document.getElementById('blog_name').value)">change</button>
-	    <label for "password">Author name
+	    <label for "author_name">Author name
 	      <input type="text" id="author_name" name="author_name" placeholder="{{ author_name }}">
 	    </label>
 	    <button onclick="req('/api/authornameEdit', document.getElementById('author_name').value)">change</button>
+	    <label for "favicon">Blog icon
+	      <input type="text" id="favicon" name="favicon" placeholder="{{ favicon }}">
+	    </label>
+	    <button onclick="req('/api/faviconEdit', document.getElementById('favicon').value)">change</button>
 	</article>
 	<article>
 	  <h2 class="title"><a href="/cms/index"><b>Index page</b></a></h2>
