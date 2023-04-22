@@ -19,7 +19,7 @@ impl Cache {
     }
 
     pub fn get_by_id(&self, id: usize) -> Post {
-	let post = &self.posts.read().unwrap()[(self.fst_id()-id)];
+	let post = &self.posts.read().unwrap()[self.fst_id()-id];
 	post.clone()
     }
 
