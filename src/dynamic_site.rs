@@ -13,37 +13,45 @@ impl Page {
 }
 
 pub struct Pages {
-    pub pages: RwLock<Vec<Page>>,
+    pub index_page: RwLock<Page>,
+    pub aboutme_page: RwLock<Page>,
 }
 
 impl Pages {
     pub fn new() -> Self {
-	Pages { pages: RwLock::new(vec![Page::new("# **My blog**\nThis is example description "), Page::new("# About me")]) }
+	Pages { index_page: RwLock::new(Page::new("# **My blog**\nThis is example description ")), 
+            aboutme_page: RwLock::new(Page::new("# About me")), }
     }
 
-    pub fn get_site(&self, id: usize) -> Page {
-	self.pages.read().unwrap()[id].clone()
+    pub fn get_index(&self) -> Page {
+	    self.index_page.read().unwrap().clone()
     }
 
-    pub fn modify_site(&self, id: usize, content: String) {
-	self.pages.write().unwrap()[id] = Page::new(&content);
+    pub fn get_aboutme(&self) -> Page {
+	    self.aboutme_page.read().unwrap().clone()
+    }
+
+    pub fn modify_index(&self, content: String) {
+	    *self.index_page.write().unwrap() = Page::new(&content);
+    }
+
+    pub fn modify_aboutme(&self, content: String) {
+	    *self.aboutme_page.write().unwrap() = Page::new(&content);
     }
 }
 
 pub struct DynVal {
-    pub strings: RwLock<Vec<String>>,
+    pub blog_name: RwLock<String>,
+    pub your_name: RwLock<String>,
+    pub master_user_login: RwLock<String>,
+    pub favicon: RwLock<String>,
 }
 
 impl DynVal {
     pub fn new(vs: Vec<String>) -> Self {
-	DynVal { strings: RwLock::new(vs), }
-    }
-
-    pub fn get_s(&self, id: usize) -> String {
-	self.strings.read().unwrap()[id].to_string()
-    }
-
-    pub fn modify_s(&self, id: usize, content: String) {
-	self.strings.write().unwrap()[id] = content;
+	DynVal { blog_name: RwLock::new(vs[0].to_string()), 
+             your_name: RwLock::new(vs[1].to_string()),
+             master_user_login: RwLock::new(vs[2].to_string()),
+             favicon: RwLock::new(vs[3].to_string()), }
     }
 }

@@ -21,7 +21,7 @@ struct IndexTemplate<'a> {
 
 #[get("/")]
 async fn index(pages: web::Data<Pages>, strings: web::Data<DynVal>) -> HttpResponse {
-    let index_file = IndexTemplate { blog_name: &strings.get_s(0), index_data: &pages.get_site(0).html_content, favicon: &strings.get_s(3), };
+    let index_file = IndexTemplate { blog_name: &strings.your_name.read().unwrap(), index_data: &pages.get_index().html_content, favicon: &strings.favicon.read().unwrap(), };
     HttpResponse::Ok().body(index_file.render().unwrap())
 }
 
@@ -35,7 +35,7 @@ struct AboutMeTemplate<'a> {
 
 #[get("/aboutme")]
 async fn aboutme(pages: web::Data<Pages>, strings: web::Data<DynVal>) -> HttpResponse {
-    let aboutme_site = AboutMeTemplate { blog_name: &strings.get_s(0), aboutme_data: &pages.get_site(1).html_content, favicon: &strings.get_s(3), };
+    let aboutme_site = AboutMeTemplate { blog_name: &strings.blog_name.read().unwrap(), aboutme_data: &pages.get_aboutme().html_content, favicon: &strings.favicon.read().unwrap(), };
     HttpResponse::Ok().body(aboutme_site.render().unwrap())
 }
 
@@ -68,7 +68,7 @@ async fn list_posts(pathid: actix_web::web::Path<usize>, cache: web::Data<Cache>
 	     return HttpResponse::Ok().body("Cannot find posts with this id");
 	 }
     }
-    let posts_file = PostsTemplate { blog_name: &strings.get_s(0), your_name: &strings.get_s(1), posts: &posts, counter: [offset-1, offset, offset+1], curr_page: offset, favicon: &strings.get_s(3), };
+    let posts_file = PostsTemplate { blog_name: &strings.blog_name.read().unwrap(), your_name: &strings.your_name.read().unwrap(), posts: &posts, counter: [offset-1, offset, offset+1], curr_page: offset, favicon: &strings.favicon.read().unwrap(), };
     HttpResponse::Ok().body(posts_file.render().unwrap())
 }
 
@@ -96,7 +96,7 @@ async fn get_post(pid: actix_web::web::Path<usize>, cache: web::Data<Cache>, str
 	    return HttpResponse::NotFound().body("Post with this id does not exist");
 	}
     }
-    let post_file = PostTemplate { blog_name: &strings.get_s(0), post_name: &post.title, post_text: &post.html_content, post_date: &post.date, favicon: &strings.get_s(3), };
+    let post_file = PostTemplate { blog_name: &strings.blog_name.read().unwrap(), post_name: &post.title, post_text: &post.html_content, post_date: &post.date, favicon: &strings.favicon.read().unwrap(), };
     HttpResponse::Ok().body(post_file.render().unwrap())
 }
 
@@ -113,7 +113,7 @@ struct CMSTemplate<'a> {
 async fn cms(req: HttpRequest, strings: web::Data<DynVal>) -> HttpResponse {
     if let Some(cookie) = req.cookie("session") {
 	if User::validate_key(cookie.value().to_string(), "sessions") {
-	    let cms_file = CMSTemplate { master_user_login: &strings.get_s(2), blog_name: &strings.get_s(0), author_name: &strings.get_s(1), favicon: &strings.get_s(3), };
+	    let cms_file = CMSTemplate { master_user_login: &strings.master_user_login.read().unwrap(), blog_name: &strings.blog_name.read().unwrap(), author_name: &strings.your_name.read().unwrap(), favicon: &strings.favicon.read().unwrap(), };
 	    HttpResponse::Ok().body(cms_file.render().unwrap())
 	} else {
 	    HttpResponse::Found().append_header(("Location","/cms/login")).finish()
@@ -192,7 +192,7 @@ async fn cms_posts(pathid: actix_web::web::Path<usize>, cache: web::Data<Cache>,
 		  return HttpResponse::Ok().body("Cannot find posts with this id");
 	      }
 	  }
-	  let posts_file = CmsPostsTemplate { master_user_login: &strings.get_s(2), your_name: &strings.get_s(1), posts: &posts, counter: [offset-1, offset, offset+1], curr_page: offset };
+	  let posts_file = CmsPostsTemplate { master_user_login: &strings.master_user_login.read().unwrap(), your_name: &strings.your_name.read().unwrap(), posts: &posts, counter: [offset-1, offset, offset+1], curr_page: offset };
 	  HttpResponse::Ok().body(posts_file.render().unwrap())
       } else {
           HttpResponse::Found().append_header(("Location","/cms/login")).finish()
@@ -240,7 +240,7 @@ struct CmsAboutMe<'a> {
 async fn cms_index(req: HttpRequest, pages: web::Data<Pages>) -> HttpResponse {
     if let Some(cookie) = req.cookie("session") {
 	if User::validate_key(cookie.value().to_string(), "sessions") {
-	    let post_cms_file = CmsAboutMe { operation: "edit", post_title: "Index", server_path: "/api/indexEdit", post_edit: "", initial_val: &pages.get_site(0).content, };
+	    let post_cms_file = CmsAboutMe { operation: "edit", post_title: "Index", server_path: "/api/indexEdit", post_edit: "", initial_val: &pages.get_index().content, };
 	    HttpResponse::Ok().body(post_cms_file.render().unwrap())
 	} else {
 	    HttpResponse::Found().append_header(("Location","/cms/login")).finish()
@@ -254,7 +254,7 @@ async fn cms_index(req: HttpRequest, pages: web::Data<Pages>) -> HttpResponse {
 async fn cms_aboutme(req: HttpRequest, pages: web::Data<Pages>) -> HttpResponse {
     if let Some(cookie) = req.cookie("session") {
 	if User::validate_key(cookie.value().to_string(), "sessions") {
-	    let post_cms_file = CmsAboutMe { operation: "edit", post_title: "About me", server_path: "/api/aboutmeEdit", post_edit: "", initial_val: &pages.get_site(1).content, };
+	    let post_cms_file = CmsAboutMe { operation: "edit", post_title: "About me", server_path: "/api/aboutmeEdit", post_edit: "", initial_val: &pages.get_aboutme().content, };
 	    HttpResponse::Ok().body(post_cms_file.render().unwrap())
 	} else {
 	    HttpResponse::Found().append_header(("Location","/cms/login")).finish()
@@ -276,7 +276,7 @@ struct AuthTemplate<'a> {
 async fn cms_auth(req: HttpRequest, strings: web::Data<DynVal>) -> HttpResponse {
     if let Some(cookie) = req.cookie("session") {
 	if User::validate_key(cookie.value().to_string(), "sessions") {
-	    let auth_file = AuthTemplate { api_keys: &User::get_keys(), master_user_login: &strings.get_s(2) };
+	    let auth_file = AuthTemplate { api_keys: &User::get_keys(), master_user_login: &strings.master_user_login.read().unwrap() };
 	    HttpResponse::Ok().body(auth_file.render().unwrap())
 	} else {
 	    HttpResponse::Found().append_header(("Location","/cms/login")).finish()
@@ -439,7 +439,7 @@ struct AboutMeForm {
 #[post("/api/aboutmeEdit")]
 async fn aboutme_edit(form: web::Form<AboutMeForm>, pages: web::Data<Pages>) -> HttpResponse {
     if User::validate_key(form.api_key.to_string(), "keys") || User::validate_key(form.api_key.to_string(), "sessions")  {
-	pages.modify_site(1, form.text.to_string());
+	pages.modify_aboutme(form.text.to_string());
 	HttpResponse::Ok().body("Aboutme website has been modified")
     } else {
 	HttpResponse::Unauthorized().body("Api key is not correct")
@@ -449,7 +449,7 @@ async fn aboutme_edit(form: web::Form<AboutMeForm>, pages: web::Data<Pages>) -> 
 #[post("/api/indexEdit")]
 async fn index_edit(form: web::Form<AboutMeForm>, pages: web::Data<Pages>) -> HttpResponse {
     if User::validate_key(form.api_key.to_string(), "keys") || User::validate_key(form.api_key.to_string(), "sessions")  {
-	pages.modify_site(0, form.text.to_string());
+	pages.modify_index(form.text.to_string());
 	HttpResponse::Ok().body("Index website has been modified")
     } else {
 	HttpResponse::Unauthorized().body("Api key is not correct")
@@ -459,7 +459,7 @@ async fn index_edit(form: web::Form<AboutMeForm>, pages: web::Data<Pages>) -> Ht
 #[post("/api/blognameEdit")]
 async fn blogname_edit(form: web::Form<AboutMeForm>, strings: web::Data<DynVal>) -> HttpResponse {
     if User::validate_key(form.api_key.to_string(), "keys") || User::validate_key(form.api_key.to_string(), "sessions")  {
-	strings.modify_s(0, form.text.to_string());
+    *strings.blog_name.write().unwrap() = form.text.to_string();
 	HttpResponse::Ok().body("Blog name has been modified")
     } else {
 	HttpResponse::Unauthorized().body("Api key is not correct")
@@ -469,7 +469,7 @@ async fn blogname_edit(form: web::Form<AboutMeForm>, strings: web::Data<DynVal>)
 #[post("/api/authornameEdit")]
 async fn author_edit(form: web::Form<AboutMeForm>, strings: web::Data<DynVal>) -> HttpResponse {
     if User::validate_key(form.api_key.to_string(), "keys") || User::validate_key(form.api_key.to_string(), "sessions")  {
-	strings.modify_s(1, form.text.to_string());
+    *strings.your_name.write().unwrap() = form.text.to_string();
 	HttpResponse::Ok().body("Author name has been modified")
     } else {
 	HttpResponse::Unauthorized().body("Api key is not correct")
@@ -479,7 +479,7 @@ async fn author_edit(form: web::Form<AboutMeForm>, strings: web::Data<DynVal>) -
 #[post("/api/faviconEdit")]
 async fn favicon_edit(form: web::Form<AboutMeForm>, strings: web::Data<DynVal>) -> HttpResponse {
     if User::validate_key(form.api_key.to_string(), "keys") || User::validate_key(form.api_key.to_string(), "sessions")  {
-	strings.modify_s(3, form.text.to_string());
+    *strings.favicon.write().unwrap() = form.text.to_string();
 	HttpResponse::Ok().body("Favicon link has been modified")
     } else {
 	HttpResponse::Unauthorized().body("Api key is not correct")
@@ -498,7 +498,7 @@ async fn master_new(form: web::Form<NewUsername>, strings: web::Data<DynVal>) ->
     if User::validate(form.login.to_string(), form.password.to_string()) || User::validate_key(form.password.to_string(), "sessions")  {
 	if form.new_username != "" {
 	    let password: &str = &User::new_master_user(&form.new_username);
-	    strings.modify_s(2, form.new_username.to_string());
+        *strings.master_user_login.write().unwrap() = form.new_username.to_string();
 	    HttpResponse::Ok().body(format!("New master user credentials:\nusername: {}\npassword: {}\n",form.new_username, password))
 	} else {
 	    HttpResponse::BadRequest().body("Master user username cannot be empty")
