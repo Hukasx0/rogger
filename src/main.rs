@@ -529,15 +529,15 @@ async fn main() -> std::io::Result<()> {
 	    .app_data(cache.clone())
 	    .app_data(pages.clone())
 	    .app_data(strings.clone())
-            .service(index)
+        .service(index)
 	    .service(index_edit)
 	    .service(web::redirect("/posts", "/posts/1"))
 	    .service(web::redirect("/posts/", "/posts/1"))
-            .service(list_posts)
-            .service(get_post)
-            .service(add_post)
-            .service(modify_post)
-            .service(remove_post)
+        .service(list_posts)
+        .service(get_post)
+        .service(add_post)
+        .service(modify_post)
+        .service(remove_post)
 	    .service(generate_key)
 	    .service(get_keys)
 	    .service(rm_key)
@@ -561,7 +561,7 @@ async fn main() -> std::io::Result<()> {
 	    .service(favicon_edit)
 	    .service(favicon)
 })
-    .bind(("0.0.0.0", 1337))?
+    .bind(("0.0.0.0", 80))?
     .run()
     .await
 }

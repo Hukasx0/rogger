@@ -23,7 +23,7 @@ sudo ./build_run.sh
 sudo ./build_run.sh --latest
 ```
 
-3. open your favorite browser and head to http://localhost:1337 (to manage posts go to http://localhost:1337/cms)
+3. open your favorite browser and head to http://localhost:80 (to manage posts go to http://localhost:80/cms)
 
 ## Using Docker to run rogger
 1. If you don't have docker installed, then install docker from https://www.docker.com/get-started/
@@ -51,13 +51,13 @@ This will create a Docker network that containers can use to communicate with ea
 docker run -d --name rogger_redis --network rogger redis
 ```
 This will start a Redis container named "rogger_redis" and connect it to the "rogger" network.
-7. Run your application container, based on your "my-rogger-image", with port mapping from host port 1337 to container port 1337 (-p 1337:1337), an environment variable REDIS_URL set to redis://rogger_redis:6379 (-e REDIS_URL=redis://rogger_redis:6379), and the network specified as "rogger" (--network rogger) using the command:
+7. Run your application container, based on your "my-rogger-image", with port mapping from host port 80 to container port 80 (-p 80:80), an environment variable REDIS_URL set to redis://rogger_redis:6379 (-e REDIS_URL=redis://rogger_redis:6379), and the network specified as "rogger" (--network rogger) using the command:
 ```
-docker run -p 1337:1337 -e REDIS_URL=redis://rogger_redis:6379 -d --name rogger_app --network rogger my-rogger-image
+docker run -p 80:80 -e REDIS_URL=redis://rogger_redis:6379 -d --name rogger_app --network rogger my-rogger-image
 ```
 This will start your application container and connect it to the "rogger" network, with the Redis URL set to the hostname of the Redis container, "rogger_redis", and the port 6379.
-8. open your favorite browser and head to http://localhost:1337
-(to manage posts go to http://localhost:1337/cms)
+8. open your favorite browser and head to http://localhost:80
+(to manage posts go to http://localhost:80/cms)
 
 ## About
 Rogger is a simple and minimalist blog application written in Rust. If you are looking for a lightweight and straightforward way to manage your own blog, or create simple diary on local network, Rogger may be the perfect solution for you.
