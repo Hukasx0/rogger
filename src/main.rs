@@ -62,12 +62,10 @@ async fn list_posts(pathid: actix_web::web::Path<usize>, cache: web::Data<Cache>
     let posts: Vec<Post>;
     if inner_path < 11 {
 	posts = cache.get_posts(inner_path);
-    } else {
-	if let Ok(posts_vec) = Database::get_list(con , offset-1) { posts = posts_vec; }
-	 else {
-	     return HttpResponse::Ok().body("Cannot find posts with this id");
-	 }
-    }
+    } else if let Ok(posts_vec) = Database::get_list(con , offset-1) { posts = posts_vec; }
+        else {
+            return HttpResponse::Ok().body("Cannot find posts with this id");
+        }
     let posts_file = PostsTemplate { blog_name: &strings.blog_name.read().unwrap(), your_name: &strings.your_name.read().unwrap(), posts: &posts, counter: [offset-1, offset, offset+1], curr_page: offset, favicon: &strings.favicon.read().unwrap(), };
     HttpResponse::Ok().body(posts_file.render().unwrap())
 }
@@ -89,12 +87,10 @@ async fn get_post(pid: actix_web::web::Path<usize>, cache: web::Data<Cache>, str
     let post: Post;
     if inner_pid < 101 && inner_pid < cache.posts.read().unwrap().len() {
 	post = cache.get_by_id(inner_pid);
+    } else if let Ok(Some(this_post)) = Database::get_post(con, inner_pid) {
+        post = this_post;
     } else {
-	if let Ok(Some(this_post)) = Database::get_post(con, inner_pid) {
-            post = this_post;
-	} else {
-	    return HttpResponse::NotFound().body("Post with this id does not exist");
-	}
+        return HttpResponse::NotFound().body("Post with this id does not exist");
     }
     let post_file = PostTemplate { blog_name: &strings.blog_name.read().unwrap(), post_name: &post.title, post_text: &post.html_content, post_date: &post.date, favicon: &strings.favicon.read().unwrap(), };
     HttpResponse::Ok().body(post_file.render().unwrap())
@@ -151,8 +147,8 @@ async fn end_session(req: HttpRequest) -> HttpResponse {
 	if User::validate_key(session.to_string(), "sessions") {
 	    match User::end_session(session.to_string()) {
 		Ok(_) => { let session_cookie = CookieBuilder::new("session", "").path("/").max_age(Duration::seconds(0)).finish();
-			   return HttpResponse::Found().cookie(session_cookie).append_header(("Location","/")).finish(); }
-		Err(_) => { return HttpResponse::InternalServerError().body("Internal server error"); }
+			   HttpResponse::Found().cookie(session_cookie).append_header(("Location","/")).finish() }
+		Err(_) => { HttpResponse::InternalServerError().body("Internal server error") }
 	    }
 	} else {
 	    HttpResponse::Unauthorized().body("Icorrect session id")
@@ -186,12 +182,10 @@ async fn cms_posts(pathid: actix_web::web::Path<usize>, cache: web::Data<Cache>,
 	  let posts: Vec<Post>;
 	  if inner_path < 11 {
 	      posts = cache.get_posts(inner_path);
-	  } else {
-	      if let Ok(posts_vec) = Database::get_list(con , offset-1) { posts = posts_vec; }
-	      else {
-		  return HttpResponse::Ok().body("Cannot find posts with this id");
-	      }
-	  }
+      } else if let Ok(posts_vec) = Database::get_list(con , offset-1) { posts = posts_vec; }
+        else {
+            return HttpResponse::Ok().body("Cannot find posts with this id");
+        }
 	  let posts_file = CmsPostsTemplate { master_user_login: &strings.master_user_login.read().unwrap(), your_name: &strings.your_name.read().unwrap(), posts: &posts, counter: [offset-1, offset, offset+1], curr_page: offset };
 	  HttpResponse::Ok().body(posts_file.render().unwrap())
       } else {
@@ -312,7 +306,7 @@ async fn cms_edit_post(req: HttpRequest, pid: actix_web::web::Path<usize>, cache
 		    return HttpResponse::NotFound().body("Post with this id does not exist");
 		}
 	    }
-	   let post_cms_file = CmsNewPostTemplate { operation: "edit", post_title: &post.title, server_path: "/api/editPost", post_edit: &format!("id={}&", inner_pid), initial_val: &post.content.replace("`", "\\`")};
+	   let post_cms_file = CmsNewPostTemplate { operation: "edit", post_title: &post.title, server_path: "/api/editPost", post_edit: &format!("id={}&", inner_pid), initial_val: &post.content.replace('`', "\\`")};
            HttpResponse::Ok().body(post_cms_file.render().unwrap())
       } else {
            HttpResponse::Found().append_header(("Location","/cms/login")).finish()
@@ -335,8 +329,8 @@ async fn add_post(form: web::Form<AddPost>, cache: web::Data<Cache>) -> HttpResp
       let con = Connection::open("rogger.db").unwrap();
        match Database::push_post(con, &form.name, &form.text) {
 	    Ok(_) => { 	cache.db_sync();
-			return HttpResponse::Ok().body(format!("Added {} to database",&form.name)); }
-	    Err(_) => { return  HttpResponse::InternalServerError().body("Cannot add post because of Database error"); }
+			HttpResponse::Ok().body(format!("Added {} to database",&form.name)) }
+	    Err(_) => { HttpResponse::InternalServerError().body("Cannot add post because of Database error") }
 	}
    } else {
       HttpResponse::Unauthorized().body("Api key is not correct")
@@ -357,8 +351,8 @@ async fn modify_post(form: web::Form<ModPost>, cache: web::Data<Cache>) -> HttpR
 	let con = Connection::open("rogger.db").unwrap();
 	match Database::edit_post(con, form.id, &form.name, &form.text) {
 	    Ok(_) => { 	cache.db_sync();
-			return HttpResponse::Ok().body(format!("Modified {} post in database",form.id)); }
-	    Err(_) => { return  HttpResponse::InternalServerError().body("Cannot edit post because of Database error"); }
+			HttpResponse::Ok().body(format!("Modified {} post in database",form.id)) }
+	    Err(_) => { HttpResponse::InternalServerError().body("Cannot edit post because of Database error") }
 	}
     } else {
        HttpResponse::Unauthorized().body("Api key is not correct")
@@ -377,8 +371,8 @@ async fn remove_post(form: web::Form<RmPost>, cache: web::Data<Cache>) -> HttpRe
        let con = Connection::open("rogger.db").unwrap();
 	match Database::rm_post(con, form.id) {
 	    Ok(_) => { 	cache.db_sync();
-			return HttpResponse::Ok().body(format!("Post with id {} has been removed",form.id)); }
-	    Err(_) => {  return HttpResponse::InternalServerError().body("Cannot remove post because of Database error"); }
+			HttpResponse::Ok().body(format!("Post with id {} has been removed",form.id)) }
+	    Err(_) => {  HttpResponse::InternalServerError().body("Cannot remove post because of Database error") }
 	}
     } else {
        HttpResponse::Unauthorized().body("Api key is not correct")
@@ -496,7 +490,7 @@ struct NewUsername {
 #[post("/api/newMasterUser")]
 async fn master_new(form: web::Form<NewUsername>, strings: web::Data<DynVal>) -> HttpResponse {
     if User::validate(form.login.to_string(), form.password.to_string()) || User::validate_key(form.password.to_string(), "sessions")  {
-	if form.new_username != "" {
+	if !form.new_username.is_empty() {
 	    let password: &str = &User::new_master_user(&form.new_username);
         *strings.master_user_login.write().unwrap() = form.new_username.to_string();
 	    HttpResponse::Ok().body(format!("New master user credentials:\nusername: {}\npassword: {}\n",form.new_username, password))
@@ -516,7 +510,7 @@ async fn favicon() -> HttpResponse {
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
-    match Database::new() {
+    match Database::connect() {
 	Ok(_) => { println!("Connected to SQLite Successfully!");}
 	Err(error) => { println!("Cannot connect to SQLite database because of: {}", error);}
     }

@@ -33,7 +33,7 @@ impl User {
 	let _: () = con.del("users").unwrap();
 	let rng_str: String = Alphanumeric.sample_string(&mut rand::thread_rng(), 32);
 	let mut hasher = Sha512::new();
-        hasher.update(rng_str.to_string());
+        hasher.update(&rng_str);
 	let master_hash = hasher.finalize();
 	let _: () = con.hset("users", username, format!("{:x}", master_hash)).unwrap();
 	rng_str
@@ -43,18 +43,13 @@ impl User {
 	 let redis_url = env::var("REDIS_URL").unwrap_or_else(|_| String::from("redis://127.0.0.1"));
 	 let client = Client::open(redis_url).unwrap();
 	 let mut con = client.get_connection().unwrap();
-	 let get_master: Option<String> = con.hget("users", login.to_string()).unwrap();
+	 let get_master: Option<String> = con.hget("users", login).unwrap();
 	 match get_master {
 	    Some(hash) => {
 	       let mut hasher = Sha512::new();
 	       hasher.update(password);
 	       let password_hash = hasher.finalize();
-	       if hash == format!("{:x}", password_hash) {
-	          true
-	       }
-	       else {
-	          false
-	       }
+	       hash == format!("{:x}", password_hash)
 	    },
 	    None => {
 	       false
@@ -80,10 +75,11 @@ impl User {
 	let mut con = client.get_connection().unwrap();
 	let options = LposOptions::default();
 	let key_index: Option<i32> = con.lpos(typev, api_key, options).unwrap();
-     	match key_index {
+    /* 	match key_index {
 	    Some(_) => true,
 	    None => false,
-	}
+	}*/
+	key_index.is_some()
     }
 
     pub fn get_keys() -> Vec<String> {
@@ -107,14 +103,14 @@ impl User {
 	 let mut con = client.get_connection().unwrap();
 	 let _: () = con.rpush("sessions", rng_str.to_string()).unwrap();
 	 let _: () = con.expire(rng_str.to_string(), 600).unwrap();
-	 rng_str.to_string()   
+	 rng_str   
      }
 
     pub fn end_session(session: String) -> RedisResult<()> {
 	let redis_url = env::var("REDIS_URL").unwrap_or_else(|_| String::from("redis://127.0.0.1"));
      	let client = Client::open(redis_url).unwrap();
 	let mut con = client.get_connection().unwrap();
-	let _: () = con.del(session)?;
+	con.del(session)?;
 	Ok(())
     }
 }

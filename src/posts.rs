@@ -13,16 +13,16 @@ pub struct Post {
 }
 
 impl Database {
-   pub fn new() -> Result<usize> {
+   pub fn connect() -> Result<usize> {
       let con = Connection::open("rogger.db")?;
-      Ok(con.execute("
+      con.execute("
          CREATE TABLE IF NOT EXISTS posts (
 	    id INTEGER PRIMARY KEY,
 	    title TEXT NOT NULL,
 	    content TEXT NOT NULL,
 	    html_content TEXT NOT NULL,
 	    date DATE NOT NULL
-	 )", [], )?)
+	 )", [], )
    }
 
    pub fn get_list(con: Connection, page: usize) -> Result<Vec<Post>> {
