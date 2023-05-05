@@ -1,0 +1,23 @@
+version: "3.8"
+
+services:
+  redis:
+    image: redis
+    container_name: rogger_redis
+    networks:
+      - rogger
+
+  app:
+    build: .
+    image: my-rogger-image
+    container_name: rogger_app
+    ports:
+      - "80:80"
+    environment:
+      - REDIS_URL=redis://rogger_redis:6379
+    networks:
+      - rogger
+
+networks:
+  rogger:
+    driver: bridge

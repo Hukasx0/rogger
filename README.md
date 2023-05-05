@@ -25,6 +25,20 @@ sudo ./build_run.sh --latest
 
 3. open your favorite browser and head to http://localhost:80 (to manage posts go to http://localhost:80/cms)
 
+## Using Docker compose to run rogger
+1. If you don't have docker installed, then install docker from https://www.docker.com/get-started/
+2. Clone project repository
+```
+git clone https://github.com/hukasx0/rogger
+cd rogger/
+```
+3. Build and run containers with docker compose:
+```
+docker-compose up
+```
+4. open your favorite browser and head to http://localhost:80
+(to manage posts go to http://localhost:80/cms)
+
 ## Using Docker to run rogger
 1. If you don't have docker installed, then install docker from https://www.docker.com/get-started/
 2. Clone project repository
