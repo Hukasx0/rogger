@@ -21,7 +21,7 @@ struct IndexTemplate<'a> {
 
 #[get("/")]
 async fn index(pages: web::Data<Pages>, strings: web::Data<DynVal>) -> HttpResponse {
-    let index_file = IndexTemplate { blog_name: &strings.your_name.read().unwrap(), index_data: &pages.get_index().html_content, favicon: &strings.favicon.read().unwrap(), };
+    let index_file = IndexTemplate { blog_name: &strings.blog_name.read().unwrap(), index_data: &pages.get_index().html_content, favicon: &strings.favicon.read().unwrap(), };
     HttpResponse::Ok().body(index_file.render().unwrap())
 }
 

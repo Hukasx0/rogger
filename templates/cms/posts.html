@@ -60,7 +60,7 @@
 	  <p class="description">{{ post.html_content|safe }}</p>
 	  <span class="date">{{ post.date }}</span>
 	  <p>Author: <a href="/cms/aboutme"><b>{{ your_name }}</b></a></p>
-	  <p class="remove-link" onclick="rmp({{ post.id }})"><b>remove post</b></p>
+	  <p class="remove-link" style="cursor: pointer;" onclick="rmp({{ post.id }})"><b>remove post</b></p>
 	</article>
 	{% endfor %}
         </div>
