@@ -1,4 +1,7 @@
 use actix_web::{get, post, App, web, HttpResponse, HttpServer, HttpRequest, cookie::CookieBuilder, cookie::time::Duration};
+use std::sync::Arc;
+use std::sync::RwLock;
+use tokio::time::{interval, Duration as dt};
 use serde::Deserialize;
 use rusqlite::Connection;
 use askama::Template;
@@ -10,6 +13,7 @@ mod cache;
 use cache::Cache;
 mod dynamic_site;
 use dynamic_site::{Pages, DynVal};
+use sesser::Sesser;
 
 #[derive(Template)]
 #[template(path = "index.html")]
@@ -106,9 +110,9 @@ struct CMSTemplate<'a> {
 }
 
 #[get("/cms/")]
-async fn cms(req: HttpRequest, strings: web::Data<DynVal>) -> HttpResponse {
+async fn cms(req: HttpRequest, strings: web::Data<DynVal>, sesser_db: web::Data<Arc<RwLock<Sesser>>>) -> HttpResponse {
     if let Some(cookie) = req.cookie("session") {
-	if User::validate_key(cookie.value().to_string(), "sessions") {
+	if User::validate_key(sesser_db.read().unwrap(), cookie.value(), "sessions") {
 	    let cms_file = CMSTemplate { master_user_login: &strings.master_user_login.read().unwrap(), blog_name: &strings.blog_name.read().unwrap(), author_name: &strings.your_name.read().unwrap(), favicon: &strings.favicon.read().unwrap(), };
 	    HttpResponse::Ok().body(cms_file.render().unwrap())
 	} else {
@@ -131,9 +135,9 @@ struct CmsLogin {
 }
 
 #[post("/cms/login")]
-async fn cms_login(form: web::Form<CmsLogin>) -> HttpResponse {
-   if User::validate(form.login.to_string(), form.password.to_string()) {
-       let session_cookie = CookieBuilder::new("session", User::new_session()).path("/").max_age(Duration::minutes(10)).finish();
+async fn cms_login(form: web::Form<CmsLogin>, sesser_db: web::Data<Arc<RwLock<Sesser>>>) -> HttpResponse {
+   if User::validate(Connection::open("rogger.db").unwrap(), form.login.to_string(), form.password.to_string()) {
+       let session_cookie = CookieBuilder::new("session", User::new_session(sesser_db.write().unwrap())).path("/").max_age(Duration::minutes(10)).finish();
        HttpResponse::Found().cookie(session_cookie).append_header(("Location","/cms/")).finish()
    } else {
       HttpResponse::Unauthorized().body("Wrong credentials")
@@ -141,15 +145,13 @@ async fn cms_login(form: web::Form<CmsLogin>) -> HttpResponse {
 }
 
 #[get("/api/endSession")]
-async fn end_session(req: HttpRequest) -> HttpResponse {
+async fn end_session(req: HttpRequest, sesser_db: web::Data<Arc<RwLock<Sesser>>>) -> HttpResponse {
     if let Some(sessionc) = req.cookie("session") {
 	let session = sessionc.value();
-	if User::validate_key(session.to_string(), "sessions") {
-	    match User::end_session(session.to_string()) {
-		Ok(_) => { let session_cookie = CookieBuilder::new("session", "").path("/").max_age(Duration::seconds(0)).finish();
-			   HttpResponse::Found().cookie(session_cookie).append_header(("Location","/")).finish() }
-		Err(_) => { HttpResponse::InternalServerError().body("Internal server error") }
-	    }
+	if User::validate_key(sesser_db.read().unwrap(), session, "sessions") {
+	    User::end_session(sesser_db.write().unwrap(), session);
+	    let session_cookie = CookieBuilder::new("session", "").path("/").max_age(Duration::seconds(0)).finish();
+		HttpResponse::Found().cookie(session_cookie).append_header(("Location","/")).finish() 
 	} else {
 	    HttpResponse::Unauthorized().body("Icorrect session id")
 	}
@@ -169,9 +171,9 @@ struct CmsPostsTemplate<'a> {
 }
 
 #[get("/cms/posts/{pathid}")]
-async fn cms_posts(pathid: actix_web::web::Path<usize>, cache: web::Data<Cache>, req: HttpRequest, strings: web::Data<DynVal>) -> HttpResponse {
+async fn cms_posts(pathid: actix_web::web::Path<usize>, cache: web::Data<Cache>, req: HttpRequest, strings: web::Data<DynVal>, sesser_db: web::Data<Arc<RwLock<Sesser>>>) -> HttpResponse {
    if let Some(cookie) = req.cookie("session") {
-      if User::validate_key(cookie.value().to_string(), "sessions") {
+      if User::validate_key(sesser_db.read().unwrap(), cookie.value(), "sessions") {
 	  let con = Connection::open("rogger.db").unwrap();
 	  let inner_path = pathid.into_inner();
 	  let offset = if inner_path > 1 {
@@ -207,9 +209,9 @@ struct CmsNewPostTemplate<'a> {
 }
 
 #[get("/cms/post_new")]
-async fn cms_add_post(req: HttpRequest) -> HttpResponse {
+async fn cms_add_post(req: HttpRequest, sesser_db: web::Data<Arc<RwLock<Sesser>>>) -> HttpResponse {
    if let Some(cookie) = req.cookie("session") {
-      if User::validate_key(cookie.value().to_string(), "sessions") {
+      if User::validate_key(sesser_db.read().unwrap(), cookie.value(), "sessions") {
 	  let post_cms_file = CmsNewPostTemplate { operation: "upload", post_title: "", server_path: "/api/addPost", post_edit: "", initial_val: ""};
 	  HttpResponse::Ok().body(post_cms_file.render().unwrap())
       } else {
@@ -231,9 +233,9 @@ struct CmsAboutMe<'a> {
 }
 
 #[get("/cms/index")]
-async fn cms_index(req: HttpRequest, pages: web::Data<Pages>) -> HttpResponse {
+async fn cms_index(req: HttpRequest, pages: web::Data<Pages>, sesser_db: web::Data<Arc<RwLock<Sesser>>>) -> HttpResponse {
     if let Some(cookie) = req.cookie("session") {
-	if User::validate_key(cookie.value().to_string(), "sessions") {
+	if User::validate_key(sesser_db.read().unwrap(), cookie.value(), "sessions") {
 	    let post_cms_file = CmsAboutMe { operation: "edit", post_title: "Index", server_path: "/api/indexEdit", post_edit: "", initial_val: &pages.get_index().content, };
 	    HttpResponse::Ok().body(post_cms_file.render().unwrap())
 	} else {
@@ -245,9 +247,9 @@ async fn cms_index(req: HttpRequest, pages: web::Data<Pages>) -> HttpResponse {
 }
 
 #[get("/cms/aboutme")]
-async fn cms_aboutme(req: HttpRequest, pages: web::Data<Pages>) -> HttpResponse {
+async fn cms_aboutme(req: HttpRequest, pages: web::Data<Pages>, sesser_db: web::Data<Arc<RwLock<Sesser>>>) -> HttpResponse {
     if let Some(cookie) = req.cookie("session") {
-	if User::validate_key(cookie.value().to_string(), "sessions") {
+	if User::validate_key(sesser_db.read().unwrap(), cookie.value(), "sessions") {
 	    let post_cms_file = CmsAboutMe { operation: "edit", post_title: "About me", server_path: "/api/aboutmeEdit", post_edit: "", initial_val: &pages.get_aboutme().content, };
 	    HttpResponse::Ok().body(post_cms_file.render().unwrap())
 	} else {
@@ -267,10 +269,10 @@ struct AuthTemplate<'a> {
 }
 
 #[get("/cms/authorization")]
-async fn cms_auth(req: HttpRequest, strings: web::Data<DynVal>) -> HttpResponse {
+async fn cms_auth(req: HttpRequest, strings: web::Data<DynVal>, sesser_db: web::Data<Arc<RwLock<Sesser>>>) -> HttpResponse {
     if let Some(cookie) = req.cookie("session") {
-	if User::validate_key(cookie.value().to_string(), "sessions") {
-	    let auth_file = AuthTemplate { api_keys: &User::get_keys(), master_user_login: &strings.master_user_login.read().unwrap() };
+	if User::validate_key(sesser_db.read().unwrap(), cookie.value(), "sessions") {
+	    let auth_file = AuthTemplate { api_keys: &User::get_keys(sesser_db.read().unwrap()), master_user_login: &strings.master_user_login.read().unwrap() };
 	    HttpResponse::Ok().body(auth_file.render().unwrap())
 	} else {
 	    HttpResponse::Found().append_header(("Location","/cms/login")).finish()
@@ -291,9 +293,9 @@ struct CmsEditPostTemplate<'a> {
 }
 
 #[get("/cms/post_edit/{pid}")]
-async fn cms_edit_post(req: HttpRequest, pid: actix_web::web::Path<usize>, cache: web::Data<Cache>) -> HttpResponse {
+async fn cms_edit_post(req: HttpRequest, pid: actix_web::web::Path<usize>, cache: web::Data<Cache>, sesser_db: web::Data<Arc<RwLock<Sesser>>>) -> HttpResponse {
     if let Some(cookie) = req.cookie("session") {
-       if User::validate_key(cookie.value().to_string(), "sessions") {
+       if User::validate_key(sesser_db.read().unwrap(), cookie.value(), "sessions") {
 	   let inner_pid = pid.into_inner();
 	    let post: Post;
 	    if inner_pid < 101 {
@@ -324,8 +326,8 @@ struct AddPost {
 }
 
 #[post("/api/addPost")]
-async fn add_post(form: web::Form<AddPost>, cache: web::Data<Cache>) -> HttpResponse {
-   if User::validate_key(form.api_key.to_string(), "keys") || User::validate_key(form.api_key.to_string(), "sessions"){
+async fn add_post(form: web::Form<AddPost>, cache: web::Data<Cache>, sesser_db: web::Data<Arc<RwLock<Sesser>>>) -> HttpResponse {
+   if User::validate_key(sesser_db.read().unwrap(), &form.api_key, "keys") || User::validate_key(sesser_db.read().unwrap(), &form.api_key, "sessions") {
       let con = Connection::open("rogger.db").unwrap();
        match Database::push_post(con, &form.name, &form.text) {
 	    Ok(_) => { 	cache.db_sync();
@@ -346,8 +348,8 @@ struct ModPost {
 }
 
 #[post("/api/editPost")]
-async fn modify_post(form: web::Form<ModPost>, cache: web::Data<Cache>) -> HttpResponse {
-    if User::validate_key(form.api_key.to_string(), "keys") || User::validate_key(form.api_key.to_string(), "sessions"){
+async fn modify_post(form: web::Form<ModPost>, cache: web::Data<Cache>, sesser_db: web::Data<Arc<RwLock<Sesser>>>) -> HttpResponse {
+    if User::validate_key(sesser_db.read().unwrap(), &form.api_key, "keys") || User::validate_key(sesser_db.read().unwrap(), &form.api_key, "sessions") {
 	let con = Connection::open("rogger.db").unwrap();
 	match Database::edit_post(con, form.id, &form.name, &form.text) {
 	    Ok(_) => { 	cache.db_sync();
@@ -366,8 +368,8 @@ struct RmPost {
 }
 
 #[post("/api/removePost")]
-async fn remove_post(form: web::Form<RmPost>, cache: web::Data<Cache>) -> HttpResponse {
-    if User::validate_key(form.api_key.to_string(), "keys") || User::validate_key(form.api_key.to_string(), "sessions")  {
+async fn remove_post(form: web::Form<RmPost>, cache: web::Data<Cache>, sesser_db: web::Data<Arc<RwLock<Sesser>>>) -> HttpResponse {
+    if User::validate_key(sesser_db.read().unwrap(), &form.api_key, "keys") || User::validate_key(sesser_db.read().unwrap(), &form.api_key, "sessions")  {
        let con = Connection::open("rogger.db").unwrap();
 	match Database::rm_post(con, form.id) {
 	    Ok(_) => { 	cache.db_sync();
@@ -386,9 +388,9 @@ struct Login {
 }
 
 #[post("/api/genKey")]
-async fn generate_key(form: web::Form<Login>) -> HttpResponse {
-   if User::validate(form.login.to_string(), form.password.to_string()) || User::validate_key(form.password.to_string(), "sessions") {
-      HttpResponse::Ok().body(User::new_key())
+async fn generate_key(form: web::Form<Login>, sesser_db: web::Data<Arc<RwLock<Sesser>>>) -> HttpResponse {
+   if User::validate(Connection::open("rogger.db").unwrap(), form.login.to_string(), form.password.to_string()) || User::validate_key(sesser_db.read().unwrap(), &form.password, "sessions") {
+      HttpResponse::Ok().body(User::new_key(sesser_db.write().unwrap()))
    }
    else {
       HttpResponse::Unauthorized().body("Your login credentials are not correct")
@@ -396,9 +398,9 @@ async fn generate_key(form: web::Form<Login>) -> HttpResponse {
 }
 
 #[post("/api/getKeys")]
-async fn get_keys(form: web::Form<Login>) -> HttpResponse {
-    if User::validate(form.login.to_string(), form.password.to_string()) {
-	HttpResponse::Ok().body(User::get_keys().join("\n"))
+async fn get_keys(form: web::Form<Login>, sesser_db: web::Data<Arc<RwLock<Sesser>>>) -> HttpResponse {
+    if User::validate(Connection::open("rogger.db").unwrap(), form.login.to_string(), form.password.to_string()) {
+	HttpResponse::Ok().body(User::get_keys(sesser_db.read().unwrap()).join("\n"))
     }
     else {
 	HttpResponse::Unauthorized().body("Your login credentials are not correct")
@@ -414,10 +416,11 @@ struct RmKey {
 }
 
 #[post("/api/rmKey")]
-async fn rm_key(form: web::Form<RmKey>) -> HttpResponse {
-    if User::validate(form.login.to_string(), form.password.to_string()) || User::validate_key(form.password.to_string(), "sessions")  {
-	User::rm_key(form.key.to_string());
-	HttpResponse::Ok().body(format!("Removed {} key",form.key))
+async fn rm_key(form: web::Form<RmKey>, sesser_db: web::Data<Arc<RwLock<Sesser>>>) -> HttpResponse {
+    let con = Connection::open("rogger.db").unwrap();
+    if User::validate(con, form.login.to_string(), form.password.to_string()) || User::validate_key(sesser_db.read().unwrap(), &form.password, "sessions")  {
+	    User::rm_key(sesser_db.write().unwrap(), &form.key);
+	    HttpResponse::Ok().body(format!("Removed {} key",form.key))
     }
     else {
 	HttpResponse::Unauthorized().body("Your login credentials are not correct")
@@ -431,8 +434,8 @@ struct AboutMeForm {
 } 
 
 #[post("/api/aboutmeEdit")]
-async fn aboutme_edit(form: web::Form<AboutMeForm>, pages: web::Data<Pages>) -> HttpResponse {
-    if User::validate_key(form.api_key.to_string(), "keys") || User::validate_key(form.api_key.to_string(), "sessions")  {
+async fn aboutme_edit(form: web::Form<AboutMeForm>, pages: web::Data<Pages>, sesser_db: web::Data<Arc<RwLock<Sesser>>>) -> HttpResponse {
+    if User::validate_key(sesser_db.read().unwrap(), &form.api_key, "keys") || User::validate_key(sesser_db.read().unwrap(), &form.api_key, "sessions")  {
 	pages.modify_aboutme(form.text.to_string());
 	HttpResponse::Ok().body("Aboutme website has been modified")
     } else {
@@ -441,8 +444,8 @@ async fn aboutme_edit(form: web::Form<AboutMeForm>, pages: web::Data<Pages>) -> 
 }
 
 #[post("/api/indexEdit")]
-async fn index_edit(form: web::Form<AboutMeForm>, pages: web::Data<Pages>) -> HttpResponse {
-    if User::validate_key(form.api_key.to_string(), "keys") || User::validate_key(form.api_key.to_string(), "sessions")  {
+async fn index_edit(form: web::Form<AboutMeForm>, pages: web::Data<Pages>, sesser_db: web::Data<Arc<RwLock<Sesser>>>) -> HttpResponse {
+    if User::validate_key(sesser_db.read().unwrap(), &form.api_key, "keys") || User::validate_key(sesser_db.read().unwrap(), &form.api_key, "sessions")  {
 	pages.modify_index(form.text.to_string());
 	HttpResponse::Ok().body("Index website has been modified")
     } else {
@@ -451,8 +454,8 @@ async fn index_edit(form: web::Form<AboutMeForm>, pages: web::Data<Pages>) -> Ht
 }
 
 #[post("/api/blognameEdit")]
-async fn blogname_edit(form: web::Form<AboutMeForm>, strings: web::Data<DynVal>) -> HttpResponse {
-    if User::validate_key(form.api_key.to_string(), "keys") || User::validate_key(form.api_key.to_string(), "sessions")  {
+async fn blogname_edit(form: web::Form<AboutMeForm>, strings: web::Data<DynVal>, sesser_db: web::Data<Arc<RwLock<Sesser>>>) -> HttpResponse {
+    if User::validate_key(sesser_db.read().unwrap(), &form.api_key, "keys") || User::validate_key(sesser_db.read().unwrap(), &form.api_key, "sessions")  {
     *strings.blog_name.write().unwrap() = form.text.to_string();
 	HttpResponse::Ok().body("Blog name has been modified")
     } else {
@@ -461,8 +464,8 @@ async fn blogname_edit(form: web::Form<AboutMeForm>, strings: web::Data<DynVal>)
 }
 
 #[post("/api/authornameEdit")]
-async fn author_edit(form: web::Form<AboutMeForm>, strings: web::Data<DynVal>) -> HttpResponse {
-    if User::validate_key(form.api_key.to_string(), "keys") || User::validate_key(form.api_key.to_string(), "sessions")  {
+async fn author_edit(form: web::Form<AboutMeForm>, strings: web::Data<DynVal>, sesser_db: web::Data<Arc<RwLock<Sesser>>>) -> HttpResponse {
+    if User::validate_key(sesser_db.read().unwrap(), &form.api_key, "keys") || User::validate_key(sesser_db.read().unwrap(), &form.api_key.to_string(), "sessions")  {
     *strings.your_name.write().unwrap() = form.text.to_string();
 	HttpResponse::Ok().body("Author name has been modified")
     } else {
@@ -471,8 +474,8 @@ async fn author_edit(form: web::Form<AboutMeForm>, strings: web::Data<DynVal>) -
 }
 
 #[post("/api/faviconEdit")]
-async fn favicon_edit(form: web::Form<AboutMeForm>, strings: web::Data<DynVal>) -> HttpResponse {
-    if User::validate_key(form.api_key.to_string(), "keys") || User::validate_key(form.api_key.to_string(), "sessions")  {
+async fn favicon_edit(form: web::Form<AboutMeForm>, strings: web::Data<DynVal>, sesser_db: web::Data<Arc<RwLock<Sesser>>>) -> HttpResponse {
+    if User::validate_key(sesser_db.read().unwrap(), &form.api_key, "keys") || User::validate_key(sesser_db.read().unwrap(), &form.api_key, "sessions")  {
     *strings.favicon.write().unwrap() = form.text.to_string();
 	HttpResponse::Ok().body("Favicon link has been modified")
     } else {
@@ -488,10 +491,10 @@ struct NewUsername {
 }
 
 #[post("/api/newMasterUser")]
-async fn master_new(form: web::Form<NewUsername>, strings: web::Data<DynVal>) -> HttpResponse {
-    if User::validate(form.login.to_string(), form.password.to_string()) || User::validate_key(form.password.to_string(), "sessions")  {
+async fn master_new(form: web::Form<NewUsername>, strings: web::Data<DynVal>, sesser_db: web::Data<Arc<RwLock<Sesser>>>) -> HttpResponse {
+    if User::validate(Connection::open("rogger.db").unwrap(), form.login.to_string(), form.password.to_string()) || User::validate_key(sesser_db.read().unwrap(), &form.password, "sessions")  {
 	if !form.new_username.is_empty() {
-	    let password: &str = &User::new_master_user(&form.new_username);
+	    let password: &str = &User::new_master_user(Connection::open("rogger.db").unwrap(), &form.new_username);
         *strings.master_user_login.write().unwrap() = form.new_username.to_string();
 	    HttpResponse::Ok().body(format!("New master user credentials:\nusername: {}\npassword: {}\n",form.new_username, password))
 	} else {
@@ -511,10 +514,18 @@ async fn favicon() -> HttpResponse {
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     match Database::connect() {
-	Ok(_) => { println!("Connected to SQLite Successfully!");}
-	Err(error) => { println!("Cannot connect to SQLite database because of: {}", error);}
+	    Ok(_) => { println!("Connected to SQLite Successfully!");}
+	    Err(error) => { println!("Cannot connect to SQLite database because of: {}", error);}
     }
-    User::init_master();
+    let sesser_db = Arc::new(RwLock::new(User::init_master(Connection::open("rogger.db").unwrap())));
+    let cloned_sesser_db = Arc::clone(&sesser_db);
+    tokio::spawn(async move {
+        let mut filter_interval = interval(dt::from_secs(10800)); // every 3 hours 
+        loop {
+            filter_interval.tick().await;
+            cloned_sesser_db.write().unwrap().filter_expired();
+        }
+    });
     let cache = web::Data::new(Cache::new());
     let pages = web::Data::new(Pages::new());
     let strings = web::Data::new(DynVal::new(vec![String::from("Example blog name"), String::from("blogger"), String::from("Rogger_Admin"), String::from("/favicon.ico")]));
@@ -523,6 +534,7 @@ async fn main() -> std::io::Result<()> {
 	    .app_data(cache.clone())
 	    .app_data(pages.clone())
 	    .app_data(strings.clone())
+        .app_data(web::Data::new(Arc::clone(&sesser_db)))
         .service(index)
 	    .service(index_edit)
 	    .service(web::redirect("/posts", "/posts/1"))

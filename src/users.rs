@@ -1,116 +1,73 @@
-use sha2::{Sha256, Sha512, Digest};
+use sha2::{Sha512, Digest};
 use rand::distributions::{Alphanumeric, DistString};
-use redis::{Commands, Client, LposOptions, RedisResult};
-use std::env;
+use rusqlite::Connection;
+use std::process;
+use sesser::Sesser;
+use std::sync::{RwLockReadGuard, RwLockWriteGuard};
+
+// use crate::sesser::Database;
 
 pub struct User {}
 
 impl User {
-     pub fn init_master() {
-	let redis_url = env::var("REDIS_URL").unwrap_or_else(|_| String::from("redis://127.0.0.1"));
-	let client = Client::open(redis_url).unwrap();
-	let mut con;
-	match client.get_connection() {
-	    Ok(value) => { println!("Redis connected successfully!"); con = value; }
-	    Err(error) => { println!("Cannot connect to Redis because of: {}", error);
-	                    std::process::exit(1); }
-	}
-	let username = "Rogger_Admin";
-	let rng_str: String = Alphanumeric.sample_string(&mut rand::thread_rng(), 32);
-	println!("Master user credentials:\nusername: {}\npassword: {}\nDO NOT SHARE IT WITH ANYONE!",username,rng_str);
-        let mut hasher = Sha512::new();
-        hasher.update(rng_str);
-	let master_hash = hasher.finalize();
-	let _: () = con.hset("users", username, format!("{:x}", master_hash)).unwrap();
-	let _: () = con.del("keys").unwrap();
-        let _: () = con.del("sessions").unwrap();
+     pub fn init_master(con: Connection) -> Sesser {
+		let mut sesser_db = Sesser::new();
+		let rng_str: String = Alphanumeric.sample_string(&mut rand::thread_rng(), 32);
+		let mut hasher = Sha512::new();
+        hasher.update(rng_str.clone());
+		let master_hash = hasher.finalize();
+		let user_db = format!("INSERT OR IGNORE INTO user (id, username, password) VALUES (1, 'Rogger_Admin', '{}');", format!("{:x}", master_hash));
+		let changed_rows = con.execute(&user_db, []).unwrap();
+		if changed_rows == 1 {
+			println!("Master user credentials:\nusername: Rogger_Admin\npassword: {}\nDO NOT SHARE IT WITH ANYONE!",rng_str);
+		} 
+		sesser_db.create_table("sessions");
+		sesser_db.create_table("api_keys");
+		sesser_db
      }
     
-    pub fn new_master_user(username: &str) -> String {
-	let redis_url = env::var("REDIS_URL").unwrap_or_else(|_| String::from("redis://127.0.0.1"));
-	let client = Client::open(redis_url).unwrap();
-	let mut con = client.get_connection().unwrap();
-	let _: () = con.del("users").unwrap();
-	let rng_str: String = Alphanumeric.sample_string(&mut rand::thread_rng(), 32);
-	let mut hasher = Sha512::new();
-        hasher.update(&rng_str);
-	let master_hash = hasher.finalize();
-	let _: () = con.hset("users", username, format!("{:x}", master_hash)).unwrap();
-	rng_str
+    pub fn new_master_user(con: Connection, username: &str) -> String {
+		let rng_str: String = Alphanumeric.sample_string(&mut rand::thread_rng(), 32);
+		let mut hasher = Sha512::new();
+        hasher.update(rng_str.clone());
+		let master_hash = hasher.finalize();
+		let query = format!("UPDATE user SET username = '{}', password = '{}' WHERE id = 1;", username, format!("{:x}", master_hash));
+		con.execute(&query, []).unwrap();
+		rng_str
     }
 	
-     pub fn validate(login: String, password: String) -> bool {
-	 let redis_url = env::var("REDIS_URL").unwrap_or_else(|_| String::from("redis://127.0.0.1"));
-	 let client = Client::open(redis_url).unwrap();
-	 let mut con = client.get_connection().unwrap();
-	 let get_master: Option<String> = con.hget("users", login).unwrap();
-	 match get_master {
-	    Some(hash) => {
-	       let mut hasher = Sha512::new();
-	       hasher.update(password);
-	       let password_hash = hasher.finalize();
-	       hash == format!("{:x}", password_hash)
-	    },
-	    None => {
-	       false
-	    }
-	 }
+     pub fn validate(con: Connection, login: String, password: String) -> bool {
+		let mut hasher = Sha512::new();
+        hasher.update(password);
+		let master_hash = hasher.finalize();
+		let mut user_db = con.prepare(&format!("SELECT * FROM user WHERE id = 1 AND username = '{}' AND password = '{}'", login, format!("{:x}", master_hash))).unwrap();
+		let mut result = user_db.query([]).unwrap();
+		if let Some(_) = result.next().unwrap() {
+			return true
+		} false
      }
 
-     pub fn new_key() -> String {
-     	 let rng_str: String = Alphanumeric.sample_string(&mut rand::thread_rng(), 16);
-	 let mut hasher = Sha256::new();
-	 hasher.update(rng_str);
-	 let key_hash = hasher.finalize();
-	 let redis_url = env::var("REDIS_URL").unwrap_or_else(|_| String::from("redis://127.0.0.1"));
-     	 let client = Client::open(redis_url).unwrap();
-	 let mut con = client.get_connection().unwrap();
-	 let _: () = con.rpush("keys",format!("{:x}", key_hash)).unwrap();
-	 format!("{:x}", key_hash)
+     pub fn new_key(mut sesser_db: RwLockWriteGuard<'_, Sesser>) -> String {
+		sesser_db.generate_value("api_keys", 604800)
      }
 
-    pub fn validate_key(api_key: String, typev: &str) -> bool {
-	let redis_url = env::var("REDIS_URL").unwrap_or_else(|_| String::from("redis://127.0.0.1"));
-        let client = Client::open(redis_url).unwrap();
-	let mut con = client.get_connection().unwrap();
-	let options = LposOptions::default();
-	let key_index: Option<i32> = con.lpos(typev, api_key, options).unwrap();
-    /* 	match key_index {
-	    Some(_) => true,
-	    None => false,
-	}*/
-	key_index.is_some()
+    pub fn validate_key(sesser_db: RwLockReadGuard<'_, Sesser>, api_key: &str, typev: &str) -> bool {
+		sesser_db.check_value_exists(typev, api_key)
     }
 
-    pub fn get_keys() -> Vec<String> {
-	let redis_url = env::var("REDIS_URL").unwrap_or_else(|_| String::from("redis://127.0.0.1"));
-     	let client = Client::open(redis_url).unwrap();
-	let mut con = client.get_connection().unwrap();
-	con.lrange("keys", 0, -1).unwrap()
+    pub fn get_keys(sesser_db: RwLockReadGuard<'_, Sesser>) -> Vec<String> {
+		sesser_db.list_values("api_keys")
     }
 
-    pub fn rm_key(api_key: String) {
-	let redis_url = env::var("REDIS_URL").unwrap_or_else(|_| String::from("redis://127.0.0.1"));
-     	let client = Client::open(redis_url).unwrap();
-	let mut con = client.get_connection().unwrap();
-	let _: () = con.lrem("keys", 1, api_key).unwrap();	
+    pub fn rm_key(mut sesser_db: RwLockWriteGuard<'_, Sesser>, api_key: &str) {
+		sesser_db.remove_value("api_keys", api_key);
     }
 
-     pub fn new_session() -> String {
-         let rng_str: String = Alphanumeric.sample_string(&mut rand::thread_rng(), 48);
-	 let redis_url = env::var("REDIS_URL").unwrap_or_else(|_| String::from("redis://127.0.0.1"));
-     	 let client = Client::open(redis_url).unwrap();
-	 let mut con = client.get_connection().unwrap();
-	 let _: () = con.rpush("sessions", rng_str.to_string()).unwrap();
-	 let _: () = con.expire(rng_str.to_string(), 600).unwrap();
-	 rng_str   
+     pub fn new_session(mut sesser_db: RwLockWriteGuard<'_, Sesser>) -> String {
+		sesser_db.generate_value("sessions", 600)
      }
 
-    pub fn end_session(session: String) -> RedisResult<()> {
-	let redis_url = env::var("REDIS_URL").unwrap_or_else(|_| String::from("redis://127.0.0.1"));
-     	let client = Client::open(redis_url).unwrap();
-	let mut con = client.get_connection().unwrap();
-	con.del(session)?;
-	Ok(())
+    pub fn end_session(mut sesser_db: RwLockWriteGuard<'_, Sesser>, session: &str) {
+		sesser_db.remove_value("sessions", session);
     }
 }

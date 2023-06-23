@@ -22,7 +22,14 @@ impl Database {
 	    content TEXT NOT NULL,
 	    html_content TEXT NOT NULL,
 	    date DATE NOT NULL
-	 )", [], )
+	 )", [], );
+    con.execute("
+    CREATE TABLE IF NOT EXISTS user (
+      id INTEGER PRIMARY KEY,
+      username TEXT NOT NULL,
+      password TEXT NOT NULL
+   )", [], );
+    Ok(0)
    }
 
    pub fn get_list(con: Connection, page: usize) -> Result<Vec<Post>> {
